@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RandomRouteImport } from './routes/random'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as DiscoverRouteImport } from './routes/discover'
@@ -16,6 +17,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as MessagesIndexRouteImport } from './routes/messages.index'
 import { Route as MessagesUserIdRouteImport } from './routes/messages.$userId'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RandomRoute = RandomRouteImport.update({
   id: '/random',
   path: '/random',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/discover': typeof DiscoverRoute
   '/profile': typeof ProfileRoute
   '/random': typeof RandomRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/messages/$userId': typeof MessagesUserIdRoute
   '/messages/': typeof MessagesIndexRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/discover': typeof DiscoverRoute
   '/profile': typeof ProfileRoute
   '/random': typeof RandomRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/messages/$userId': typeof MessagesUserIdRoute
   '/messages': typeof MessagesIndexRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/discover': typeof DiscoverRoute
   '/profile': typeof ProfileRoute
   '/random': typeof RandomRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/messages/$userId': typeof MessagesUserIdRoute
   '/messages/': typeof MessagesIndexRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/discover'
     | '/profile'
     | '/random'
+    | '/sitemap.xml'
     | '/messages/$userId'
     | '/messages/'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/discover'
     | '/profile'
     | '/random'
+    | '/sitemap.xml'
     | '/messages/$userId'
     | '/messages'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/discover'
     | '/profile'
     | '/random'
+    | '/sitemap.xml'
     | '/messages/$userId'
     | '/messages/'
   fileRoutesById: FileRoutesById
@@ -104,12 +116,20 @@ export interface RootRouteChildren {
   DiscoverRoute: typeof DiscoverRoute
   ProfileRoute: typeof ProfileRoute
   RandomRoute: typeof RandomRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   MessagesUserIdRoute: typeof MessagesUserIdRoute
   MessagesIndexRoute: typeof MessagesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/random': {
       id: '/random'
       path: '/random'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   DiscoverRoute: DiscoverRoute,
   ProfileRoute: ProfileRoute,
   RandomRoute: RandomRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   MessagesUserIdRoute: MessagesUserIdRoute,
   MessagesIndexRoute: MessagesIndexRoute,
 }
