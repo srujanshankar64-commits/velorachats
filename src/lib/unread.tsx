@@ -88,6 +88,10 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
         if (r.type === "dm") roomMapRef.current.set(r.id, r.user_a);
       })
       .subscribe();
+
+    return () => { active = false; ch.unsubscribe(); };
+  }, [user]);
+
   const markRead = useCallback(async (otherUserId: string) => {
     if (!user) return;
     let roomId: string | undefined;
@@ -104,10 +108,6 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       const next = { ...u }; delete next[otherUserId]; return next;
     });
   }, [user]);
-      if (!u[otherUserId]) return u;
-      const next = { ...u }; delete next[otherUserId]; return next;
-    });
-  }
 
   const total = Object.values(unread).reduce((a, b) => a + b, 0);
   return <Ctx.Provider value={{ unread, total, markRead }}>{children}</Ctx.Provider>;
