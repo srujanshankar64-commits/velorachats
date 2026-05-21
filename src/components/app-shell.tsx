@@ -2,12 +2,12 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { MessageCircle, Compass, Shuffle, User } from "lucide-react";
 import { useUnread } from "@/lib/unread";
 
-const items = [
+const items: Array<{ to: "/discover" | "/random" | "/messages" | "/profile"; label: string; icon: typeof Compass; showBadge?: boolean }> = [
   { to: "/discover", label: "Home", icon: Compass },
   { to: "/random", label: "Random", icon: Shuffle },
   { to: "/messages", label: "Chats", icon: MessageCircle, showBadge: true },
   { to: "/profile", label: "Me", icon: User },
-] as const;
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
