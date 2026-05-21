@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useUnread } from "@/lib/unread";
 
 export const Route = createFileRoute("/_authenticated/messages/")({
   head: () => ({ meta: [{ title: "Messages — Velora" }] }),
@@ -17,6 +18,7 @@ type RoomRow = {
 
 function Messages() {
   const { user } = useAuth();
+  const { unread } = useUnread();
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +53,7 @@ function Messages() {
 
   return (
     <div className="px-4 py-5 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-display font-bold mb-4">Messages</h1>
+      <h1 className="text-2xl font-display font-bold mb-4">Chats</h1>
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="glass rounded-2xl h-16 animate-pulse" />)}</div>
       ) : rooms.length === 0 ? (
@@ -62,22 +64,30 @@ function Messages() {
         </div>
       ) : (
         <div className="space-y-2">
-          {rooms.map((r) => r.other && (
-            <Link key={r.id} to="/messages/$userId" params={{ userId: r.other.id }} className="flex items-center gap-3 glass rounded-2xl p-3 hover:bg-white/5 transition">
-              <div className="relative">
-                {r.other.avatar_url ? (
-                  <img src={r.other.avatar_url} alt="" loading="lazy" className="h-12 w-12 rounded-full" />
-                ) : (
-                  <div className="h-12 w-12 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{r.other.username[0]?.toUpperCase()}</div>
+          {rooms.map((r) => r.other && (() => {
+            const unreadN = unread[r.other.id] ?? 0;
+            return (
+              <Link key={r.id} to="/messages/$userId" params={{ userId: r.other.id }} className="flex items-center gap-3 glass rounded-2xl p-3 hover:bg-white/5 transition">
+                <div className="relative shrink-0">
+                  {r.other.avatar_url ? (
+                    <img src={r.other.avatar_url} alt="" loading="lazy" className="h-12 w-12 rounded-full" />
+                  ) : (
+                    <div className="h-12 w-12 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{r.other.username[0]?.toUpperCase()}</div>
+                  )}
+                  {r.other.is_online && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 ring-2 ring-background" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{r.other.username}</p>
+                  <p className={`text-xs truncate ${unreadN > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>{r.last?.content ?? "Say hi 👋"}</p>
+                </div>
+                {unreadN > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center shrink-0">
+                    {unreadN > 99 ? "99+" : unreadN}
+                  </span>
                 )}
-                {r.other.is_online && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 ring-2 ring-background" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{r.other.username}</p>
-                <p className="text-xs text-muted-foreground truncate">{r.last?.content ?? "Say hi 👋"}</p>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })())}
         </div>
       )}
     </div>

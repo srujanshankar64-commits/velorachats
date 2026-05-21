@@ -56,6 +56,36 @@ export type Database = {
           },
         ]
       }
+      friendships: {
+        Row: {
+          addressee_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_temporary: boolean
+          requester_id: string
+          status: string
+        }
+        Insert: {
+          addressee_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_temporary?: boolean
+          requester_id: string
+          status?: string
+        }
+        Update: {
+          addressee_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_temporary?: boolean
+          requester_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       match_queue: {
         Row: {
           created_at: string
@@ -176,6 +206,24 @@ export type Database = {
           last_seen?: string
           prefer_gender?: Database["public"]["Enums"]["prefer_t"]
           username?: string
+        }
+        Relationships: []
+      }
+      room_reads: {
+        Row: {
+          last_read_at: string
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          room_id?: string
+          user_id?: string
         }
         Relationships: []
       }
