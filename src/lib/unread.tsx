@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
@@ -88,13 +88,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
         if (r.type === "dm") roomMapRef.current.set(r.id, r.user_a);
       })
       .subscribe();
-
-    return () => { active = false; ch.unsubscribe(); };
-  }, [user]);
-
-  async function markRead(otherUserId: string) {
+  const markRead = useCallback(async (otherUserId: string) => {
     if (!user) return;
-    // Find the room id locally
     let roomId: string | undefined;
     for (const [rid, oid] of roomMapRef.current.entries()) if (oid === otherUserId) { roomId = rid; break; }
     if (!roomId) {
@@ -105,6 +100,10 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     if (!roomId) return;
     await supabase.from("room_reads").upsert({ user_id: user.id, room_id: roomId, last_read_at: new Date().toISOString() });
     setUnread((u) => {
+      if (!u[otherUserId]) return u;
+      const next = { ...u }; delete next[otherUserId]; return next;
+    });
+  }, [user]);
       if (!u[otherUserId]) return u;
       const next = { ...u }; delete next[otherUserId]; return next;
     });
