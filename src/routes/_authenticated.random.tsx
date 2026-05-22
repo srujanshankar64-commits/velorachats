@@ -1,127 +1,127 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Shuffle, SkipForward, Send, X, Sparkles, Loader2, LogOut } from "lucide-react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUp, MoreHorizontal, Check, CheckCheck, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { startPresence } from "@/lib/presence";
+import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/random")({
-  head: () => ({ meta: [{ title: "Random Chat — Velora" }] }),
+  head: () => ({ meta: [{ title: "Random — Velora" }] }),
   component: RandomPage,
 });
 
-type Phase = "setup" | "searching" | "chatting";
+type Phase = "searching" | "chatting";
 type Msg = { id: string; sender_id: string; content: string; created_at: string };
-type Partner = { id: string; username: string; avatar_url: string | null; gender: string; country: string | null; age: number | null };
+type Partner = { id: string; username: string; avatar_url: string | null; is_online: boolean };
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
 
 function RandomPage() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const nav = useNavigate();
-  const [phase, setPhase] = useState<Phase>("setup");
-  const [myGender, setMyGender] = useState<"male" | "female" | "other">("male");
-  const [prefer, setPrefer] = useState<"male" | "female" | "any">("female");
+  const [phase, setPhase] = useState<Phase>("searching");
+  const [waiters, setWaiters] = useState<number>(0);
+  const [elapsed, setElapsed] = useState<number>(0);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [partner, setPartner] = useState<Partner | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const queueChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const msgChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const queueChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const msgChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const inset = useKeyboardInset();
+  const searchStartRef = useRef<number>(Date.now());
 
-  // Load profile defaults + presence
-  useEffect(() => {
+  useEffect(() => { if (!user) return; return startPresence(user.id); }, [user]);
+
+  const cleanupQueue = useCallback(() => { queueChRef.current?.unsubscribe(); queueChRef.current = null; }, []);
+  const cleanupMsgs = useCallback(() => { msgChRef.current?.unsubscribe(); msgChRef.current = null; }, []);
+  useEffect(() => () => { cleanupQueue(); cleanupMsgs(); }, [cleanupQueue, cleanupMsgs]);
+
+  const enterRoom = useCallback(async (rid: string) => {
     if (!user) return;
-    const stop = startPresence(user.id);
-    supabase.from("profiles").select("gender,prefer_gender").eq("id", user.id).single().then(({ data }) => {
-      if (data) {
-        setMyGender(data.gender as typeof myGender);
-        setPrefer(data.prefer_gender as typeof prefer);
-      }
-    });
-    return stop;
-  }, [user]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
-
-  const cleanupQueue = () => {
-    queueChannelRef.current?.unsubscribe();
-    queueChannelRef.current = null;
-  };
-  const cleanupMessages = () => {
-    msgChannelRef.current?.unsubscribe();
-    msgChannelRef.current = null;
-  };
-
-  useEffect(() => () => { cleanupQueue(); cleanupMessages(); }, []);
-
-  async function loadPartnerForRoom(rid: string) {
-    const { data: room } = await supabase.from("chat_rooms").select("user_a,user_b").eq("id", rid).single();
-    if (!room || !user) return;
-    const otherId = room.user_a === user.id ? room.user_b : room.user_a;
-    const { data: prof } = await supabase.from("profiles").select("id,username,avatar_url,gender,country,age").eq("id", otherId).single();
-    if (prof) setPartner(prof as Partner);
-  }
-
-  async function enterRoom(rid: string) {
     cleanupQueue();
     setRoomId(rid);
     setMessages([]);
     setPhase("chatting");
-    await loadPartnerForRoom(rid);
-    // Load existing messages
+    const { data: room } = await supabase.from("chat_rooms").select("user_a,user_b").eq("id", rid).single();
+    if (room) {
+      const otherId = room.user_a === user.id ? room.user_b : room.user_a;
+      const { data: prof } = await supabase.from("profiles").select("id,username,avatar_url,is_online").eq("id", otherId).single();
+      if (prof) setPartner(prof as Partner);
+    }
     const { data: msgs } = await supabase.from("messages").select("*").eq("room_id", rid).order("created_at");
     if (msgs) setMessages(msgs as Msg[]);
-    // Subscribe to new messages
     const ch = supabase.channel(`room:${rid}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${rid}` }, (payload) => {
-        setMessages((m) => m.some((x) => x.id === (payload.new as Msg).id) ? m : [...m, payload.new as Msg]);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_rooms", filter: `id=eq.${rid}` }, (payload) => {
-        if ((payload.new as { ended_at: string | null }).ended_at) {
-          toast("Stranger left the chat");
-        }
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${rid}` },
+        (payload) => {
+          const m = payload.new as Msg;
+          setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
+        })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_rooms", filter: `id=eq.${rid}` },
+        (payload) => { if ((payload.new as { ended_at: string | null }).ended_at) toast("Stranger left"); })
       .subscribe();
-    msgChannelRef.current = ch;
-  }
+    msgChRef.current = ch;
+  }, [user, cleanupQueue]);
 
-  async function startSearch() {
+  const startSearch = useCallback(async () => {
     if (!user) return;
-    cleanupMessages();
+    cleanupMsgs();
     setPhase("searching");
-    setMessages([]);
-    setPartner(null);
-    setRoomId(null);
+    setMessages([]); setPartner(null); setRoomId(null);
+    searchStartRef.current = Date.now();
+    setElapsed(0);
 
-    // Save preferences
-    await supabase.from("profiles").update({ gender: myGender, prefer_gender: prefer }).eq("id", user.id);
+    const { data: prof } = await supabase.from("profiles").select("gender,prefer_gender").eq("id", user.id).single();
+    const myGender = (prof?.gender ?? "other") as "male" | "female" | "other";
+    const prefer = (prof?.prefer_gender ?? "any") as "male" | "female" | "any";
 
     const { data, error } = await supabase.rpc("find_or_enqueue_match", { p_gender: myGender, p_prefer: prefer });
-    if (error) { toast.error(error.message); setPhase("setup"); return; }
+    if (error) { toast.error(error.message); return; }
+    if (data) { enterRoom(data as string); return; }
 
-    if (data) {
-      await enterRoom(data as string);
-      return;
-    }
-
-    // Wait via realtime for matched_room_id update
     const ch = supabase.channel(`queue:${user.id}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "match_queue", filter: `user_id=eq.${user.id}` }, (payload) => {
-        const rid = (payload.new as { matched_room_id: string | null }).matched_room_id;
-        if (rid) enterRoom(rid);
-      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "match_queue", filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const rid = (payload.new as { matched_room_id: string | null }).matched_room_id;
+          if (rid) enterRoom(rid);
+        })
       .subscribe();
-    queueChannelRef.current = ch;
-  }
+    queueChRef.current = ch;
+  }, [user, enterRoom, cleanupMsgs]);
 
-  async function cancelSearch() {
+  // Kick off first search on mount
+  useEffect(() => { if (user && phase === "searching" && !roomId) startSearch(); /* eslint-disable-next-line */ }, [user]);
+
+  // Waiters count + elapsed during search
+  useEffect(() => {
+    if (phase !== "searching") return;
+    let alive = true;
+    const refresh = async () => {
+      const { count } = await supabase.from("match_queue").select("user_id", { count: "exact", head: true }).is("matched_room_id", null);
+      if (alive && typeof count === "number") setWaiters(count);
+      if (alive) setElapsed(Math.floor((Date.now() - searchStartRef.current) / 1000));
+    };
+    refresh();
+    const id = setInterval(refresh, 3000);
+    return () => { alive = false; clearInterval(id); };
+  }, [phase]);
+
+  useEffect(() => {
+    const el = scrollRef.current; if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  async function cancel() {
     if (!user) return;
     cleanupQueue();
     await supabase.from("match_queue").delete().eq("user_id", user.id);
-    setPhase("setup");
+    nav({ to: "/" });
   }
 
   async function send() {
@@ -133,129 +133,112 @@ function RandomPage() {
   }
 
   async function endChat() {
-    cleanupMessages();
-    if (roomId) {
-      await supabase.from("chat_rooms").update({ ended_at: new Date().toISOString() }).eq("id", roomId);
-    }
-    setRoomId(null);
-    setPartner(null);
-    setMessages([]);
-    setPhase("setup");
+    cleanupMsgs();
+    if (roomId) await supabase.from("chat_rooms").update({ ended_at: new Date().toISOString() }).eq("id", roomId);
+    setRoomId(null); setPartner(null); setMessages([]);
   }
+  async function next() { await endChat(); await startSearch(); }
 
-  async function skip() {
-    await endChat();
-    await startSearch();
-  }
-
-  if (phase === "chatting" && partner) {
-    return (
-      <div className="flex flex-col h-[100dvh] md:h-screen">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 glass-strong">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              {partner.avatar_url ? (
-                <img src={partner.avatar_url} alt="" loading="lazy" className="h-10 w-10 rounded-full" />
-              ) : (
-                <div className="h-10 w-10 rounded-full bg-gradient-primary flex items-center justify-center font-bold">{partner.username[0]?.toUpperCase()}</div>
-              )}
-              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-400 ring-2 ring-background" />
-            </div>
-            <div>
-              <p className="font-semibold text-sm">{partner.username}</p>
-              <p className="text-[11px] text-muted-foreground capitalize">{partner.gender}{partner.age ? ` · ${partner.age}` : ""}{partner.country ? ` · ${partner.country}` : ""}</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => nav({ to: "/messages/$userId", params: { userId: partner.id } })} className="px-3 py-1.5 rounded-lg glass text-xs">Add</button>
-            <button onClick={skip} className="flex items-center gap-1 px-3 py-1.5 rounded-lg glass text-xs"><SkipForward className="h-3.5 w-3.5" />Skip</button>
-            <button onClick={endChat} className="p-2 rounded-lg glass"><X className="h-4 w-4" /></button>
-          </div>
-        </div>
-
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2 scrollbar-thin">
-          <div className="text-center text-[11px] text-muted-foreground py-2">
-            <span className="px-3 py-1 glass rounded-full">Connected · say hi 👋</span>
-          </div>
-          {messages.map((m) => {
-            const mine = m.sender_id === user!.id;
-            return (
-              <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm break-words ${mine ? "bg-gradient-primary text-primary-foreground rounded-br-md" : "glass rounded-bl-md"}`}>
-                  {m.content}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="p-3 border-t border-border/40">
-          <div className="flex items-center gap-2 glass rounded-2xl p-1.5">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Type a message…"
-              maxLength={2000}
-              className="flex-1 bg-transparent outline-none text-sm px-3"
-            />
-            <button onClick={send} disabled={!input.trim()} className="h-9 w-9 rounded-xl bg-gradient-primary flex items-center justify-center disabled:opacity-40">
-              <Send className="h-4 w-4 text-primary-foreground" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // ===== SEARCHING UI =====
   if (phase === "searching") {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 text-center">
-        <div className="relative w-28 h-28 mb-7">
-          <span className="absolute inset-0 rounded-full bg-primary/30 animate-pulse-ring" />
-          <span className="absolute inset-0 rounded-full bg-accent/30 animate-pulse-ring" style={{ animationDelay: "0.7s" }} />
-          <div className="relative h-28 w-28 rounded-full bg-gradient-primary flex items-center justify-center glow-neon">
-            <Sparkles className="h-10 w-10 text-primary-foreground" />
+      <div className="min-h-[100dvh] bg-black text-white flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+          <div className="relative h-12 w-12 mb-6">
+            <span className="block h-12 w-12 rounded-full border-2 border-[#1C1C1E] border-t-[#7C3AED] spin-slow" />
           </div>
+          <p className="text-lg text-white">Finding your match…</p>
+          <p className="mt-3 text-sm text-[#888] flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
+            {waiters} {waiters === 1 ? "person" : "people"} waiting right now
+          </p>
+          <p className="mt-1.5 text-[13px] text-[#666]">
+            {elapsed > 30 ? "Taking a little longer… hang tight 🙏" : "Usually connects in under 10 seconds"}
+          </p>
         </div>
-        <h2 className="text-2xl font-display font-bold mb-2">Finding someone…</h2>
-        <p className="text-muted-foreground text-sm mb-6">Connecting you with a real stranger</p>
-        <button onClick={cancelSearch} className="text-sm text-muted-foreground underline">Cancel</button>
+        <div className="pb-[calc(env(safe-area-inset-bottom)+24px)] text-center">
+          <button onClick={cancel} className="text-sm text-[#888]">Cancel</button>
+        </div>
       </div>
     );
   }
 
+  // ===== CHATTING UI =====
   return (
-    <div className="px-4 py-6 md:py-10 max-w-md mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-display font-bold">Random <span className="neon-text">chat</span></h1>
-          <p className="text-sm text-muted-foreground">Meet a real person right now</p>
-        </div>
-        <button onClick={() => signOut()} className="p-2 rounded-lg glass"><LogOut className="h-4 w-4" /></button>
-      </div>
-      <div className="glass-strong rounded-3xl p-5 space-y-5">
-        <div>
-          <p className="text-xs font-medium mb-2 text-muted-foreground">I am</p>
-          <div className="grid grid-cols-3 gap-2">
-            {(["male", "female", "other"] as const).map((g) => (
-              <button key={g} onClick={() => setMyGender(g)} className={`py-2.5 rounded-xl text-sm font-medium capitalize ${myGender === g ? "bg-gradient-primary text-primary-foreground" : "glass"}`}>{g}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-medium mb-2 text-muted-foreground">Match me with</p>
-          <div className="grid grid-cols-3 gap-2">
-            {([{ v: "female", l: "Females" }, { v: "male", l: "Males" }, { v: "any", l: "Anyone" }] as const).map((p) => (
-              <button key={p.v} onClick={() => setPrefer(p.v)} className={`py-2.5 rounded-xl text-sm font-medium ${prefer === p.v ? "bg-gradient-primary text-primary-foreground" : "glass"}`}>{p.l}</button>
-            ))}
-          </div>
-        </div>
-        <button onClick={startSearch} className="w-full py-3.5 rounded-xl bg-gradient-primary text-primary-foreground font-semibold glow-primary flex items-center justify-center gap-2">
-          <Shuffle className="h-5 w-5" /> Find someone now
+    <div className="flex flex-col h-[100dvh] bg-black text-white">
+      <header className="h-14 shrink-0 px-3 flex items-center gap-3 bg-black">
+        <button onClick={endChat} className="p-2 -ml-2 text-white" aria-label="Back">
+          <ArrowLeft className="h-6 w-6" strokeWidth={1.5} />
         </button>
-        <p className="text-[11px] text-center text-muted-foreground">Be kind. Don't share personal info. ✨</p>
+        {partner && (
+          <div className="flex-1 min-w-0 flex items-center gap-2.5">
+            <div className="relative">
+              {partner.avatar_url ? (
+                <img src={partner.avatar_url} alt="" loading="lazy" width={32} height={32} className="h-8 w-8 rounded-full" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-[#7C3AED] flex items-center justify-center text-xs">{partner.username[0]?.toUpperCase()}</div>
+              )}
+              <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-black ${partner.is_online ? "bg-[#22C55E]" : "bg-[#555]"}`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm truncate leading-tight">{partner.username}</p>
+              <p className="text-[11px] text-[#888] leading-tight">stranger</p>
+            </div>
+          </div>
+        )}
+        <button onClick={() => setMenuOpen(true)} className="p-2 -mr-2" aria-label="More"><MoreHorizontal className="h-5 w-5" strokeWidth={1.5} /></button>
+      </header>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin">
+        <div className="text-center text-[12px] text-[#666] py-4">Connected · say hi 👋</div>
+        {messages.map((m) => (
+          <RBubble key={m.id} m={m} mine={m.sender_id === user!.id} />
+        ))}
       </div>
+
+      <div className="relative shrink-0 bg-black px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)]" style={{ transform: inset ? `translateY(-${inset}px)` : undefined, transition: "transform 200ms ease" }}>
+        <button onClick={next} className="absolute left-1/2 -translate-x-1/2 -top-3 px-4 h-10 rounded-full border border-white/30 text-[13px] bg-black">Next person →</button>
+        <div className="flex items-end gap-2 bg-[#1C1C1E] rounded-[20px] pl-4 pr-1.5 py-1.5 min-h-[44px]">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            placeholder="Message…"
+            maxLength={2000}
+            className="flex-1 bg-transparent outline-none text-[15px] py-2 placeholder:text-[#666]"
+          />
+          <button onClick={send} disabled={!input.trim()} aria-label="Send" className={`h-9 w-9 rounded-full bg-[#7C3AED] flex items-center justify-center transition-opacity duration-200 ${input.trim() ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+            <ArrowUp className="h-5 w-5 text-white" strokeWidth={1.5} />
+          </button>
+        </div>
+      </div>
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end" onClick={() => setMenuOpen(false)}>
+          <div className="w-full bg-[#1C1C1E] rounded-t-3xl p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] fade-up" onClick={(e) => e.stopPropagation()}>
+            <div className="h-1 w-10 rounded-full bg-[#333] mx-auto mb-4" />
+            <button onClick={() => { setMenuOpen(false); toast.success("Report received."); }} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm">Report</button>
+            <button onClick={() => { setMenuOpen(false); next(); }} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm text-red-400">Block & next</button>
+            <button onClick={() => setMenuOpen(false)} className="w-full h-12 mt-2 rounded-full bg-black text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const RBubble = memo(function RBubble({ m, mine }: { m: Msg; mine: boolean }) {
+  return (
+    <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[80%]">
+        <div className={`px-3.5 py-2.5 text-[15px] break-words ${mine ? "bg-[#7C3AED] text-white rounded-[18px] rounded-br-[4px]" : "bg-[#1C1C1E] text-white rounded-[18px] rounded-bl-[4px]"}`}>
+          {m.content}
+        </div>
+        <div className={`mt-0.5 flex items-center gap-1 text-[11px] text-[#666] ${mine ? "justify-end" : "justify-start"}`}>
+          <span>{fmtTime(m.created_at)}</span>
+          {mine && <Check className="h-3 w-3 text-[#666]" strokeWidth={1.5} />}
+        </div>
+      </div>
+    </div>
+  );
+});
