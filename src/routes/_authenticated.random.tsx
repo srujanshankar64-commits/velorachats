@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, MoreHorizontal, Check, CheckCheck, ArrowLeft } from "lucide-react";
+import { ArrowUp, MoreHorizontal, Check, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { startPresence } from "@/lib/presence";
