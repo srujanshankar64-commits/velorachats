@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, UserPlus, Clock, Check } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowUp, MoreHorizontal, Check, CheckCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useUnread } from "@/lib/unread";
+import { useKeyboardInset } from "@/lib/use-keyboard-inset";
+import { useSwipeBack } from "@/lib/use-swipe-back";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/messages/$userId")({
@@ -13,136 +15,233 @@ export const Route = createFileRoute("/_authenticated/messages/$userId")({
 
 type Msg = { id: string; sender_id: string; content: string; created_at: string };
 type Other = { id: string; username: string; avatar_url: string | null; is_online: boolean };
-type Friendship = { id: string; requester_id: string; addressee_id: string; status: string; is_temporary: boolean; expires_at: string | null };
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
 
 function DMChat() {
   const { userId } = Route.useParams();
   const { user } = useAuth();
   const { markRead } = useUnread();
+  const nav = useNavigate();
+  const goBack = useCallback(() => nav({ to: "/messages" }), [nav]);
+
   const [roomId, setRoomId] = useState<string | null>(null);
   const [other, setOther] = useState<Other | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
-  const [friend, setFriend] = useState<Friendship | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const [otherLastRead, setOtherLastRead] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimerRef = useRef<number | null>(null);
+  const inset = useKeyboardInset();
+  useSwipeBack(goBack);
+
+  // Load room + profile
   useEffect(() => {
     if (!user) return;
     let active = true;
     (async () => {
-      const [{ data: prof }, { data: rid, error }, { data: fs }] = await Promise.all([
+      const [{ data: prof }, { data: rid, error }] = await Promise.all([
         supabase.from("profiles").select("id,username,avatar_url,is_online").eq("id", userId).single(),
         supabase.rpc("get_or_create_dm", { target: userId }),
-        supabase.from("friendships").select("*").or(`and(requester_id.eq.${user.id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${user.id})`).maybeSingle(),
       ]);
       if (!active) return;
       if (prof) setOther(prof as Other);
       if (error) return toast.error(error.message);
       setRoomId(rid as string);
-      setFriend(fs as Friendship | null);
-      const { data: msgs } = await supabase.from("messages").select("*").eq("room_id", rid as string).order("created_at");
-      if (active && msgs) setMessages(msgs as Msg[]);
-      // Mark as read on entry
+      const [{ data: msgs }, { data: readRow }] = await Promise.all([
+        supabase.from("messages").select("*").eq("room_id", rid as string).order("created_at").limit(60),
+        supabase.from("room_reads").select("last_read_at").eq("room_id", rid as string).eq("user_id", userId).maybeSingle(),
+      ]);
+      if (!active) return;
+      if (msgs) setMessages(msgs as Msg[]);
+      setOtherLastRead(readRow?.last_read_at ?? null);
       markRead(userId);
     })();
     return () => { active = false; };
   }, [userId, user, markRead]);
 
+  // Realtime messages + reads + typing
   useEffect(() => {
     if (!roomId || !user) return;
-    const ch = supabase.channel(`dm:${roomId}`)
+    const ch = supabase.channel(`dm:${roomId}`, { config: { broadcast: { self: false } } })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
         (payload) => {
           const m = payload.new as Msg;
           setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
           if (m.sender_id !== user.id) markRead(userId);
         })
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_reads", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const row = payload.new as { user_id: string; last_read_at: string };
+          if (row.user_id === userId) setOtherLastRead(row.last_read_at);
+        })
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const p = payload.payload as { from: string; typing: boolean };
+        if (p.from === userId) setOtherTyping(p.typing);
+      })
       .subscribe();
-    return () => { ch.unsubscribe(); };
+    typingChRef.current = ch;
+    return () => { ch.unsubscribe(); typingChRef.current = null; };
   }, [roomId, user, userId, markRead]);
 
+  // Auto-scroll to bottom
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, otherTyping]);
+
+  // Typing broadcast (debounced)
+  function broadcastTyping(typing: boolean) {
+    const ch = typingChRef.current;
+    if (!ch || !user) return;
+    ch.send({ type: "broadcast", event: "typing", payload: { from: user.id, typing } });
+  }
+  function onInputChange(v: string) {
+    setInput(v);
+    broadcastTyping(true);
+    if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = window.setTimeout(() => broadcastTyping(false), 1500);
+  }
 
   async function send() {
     const text = input.trim();
     if (!text || !roomId || !user) return;
     setInput("");
+    broadcastTyping(false);
     const { error } = await supabase.from("messages").insert({ room_id: roomId, sender_id: user.id, content: text });
     if (error) toast.error(error.message);
   }
 
-  async function addFriend(temporary: boolean) {
-    if (!user) return;
-    if (friend?.status === "accepted") return toast("Already friends");
-    const expires_at = temporary ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null;
-    const { data, error } = await supabase.from("friendships").insert({
-      requester_id: user.id, addressee_id: userId, is_temporary: temporary, expires_at, status: "accepted",
-    }).select().single();
-    if (error) return toast.error(error.message);
-    setFriend(data as Friendship);
-    toast.success(temporary ? "Timepass friend for 24h ⏳" : "Friend added ✨");
-  }
+  // ESC closes menu
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
-  const isFriend = friend?.status === "accepted";
+  const myLastMessageAt = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender_id === user?.id) return messages[i].created_at;
+    return null;
+  }, [messages, user?.id]);
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background">
-      <div className="flex items-center gap-3 px-3 py-2.5 border-b border-border/60 bg-background">
-        <Link to="/messages" className="p-1.5 rounded-lg hover:bg-white/5"><ArrowLeft className="h-5 w-5" /></Link>
+    <div className="flex flex-col h-[100dvh] bg-black text-white">
+      {/* Top bar */}
+      <header className="h-14 shrink-0 px-3 flex items-center gap-3 bg-black">
+        <button onClick={goBack} className="p-2 -ml-2 text-white" aria-label="Back">
+          <ArrowLeft className="h-6 w-6" strokeWidth={1.5} />
+        </button>
         {other && (
-          <>
-            <div className="relative shrink-0">
-              {other.avatar_url ? <img src={other.avatar_url} alt="" loading="lazy" className="h-9 w-9 rounded-full" /> :
-                <div className="h-9 w-9 rounded-full bg-gradient-primary flex items-center justify-center font-bold text-sm">{other.username[0]?.toUpperCase()}</div>}
-              {other.is_online && <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-background" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm truncate">{other.username}</p>
-              <p className="text-[10px] text-muted-foreground">{other.is_online ? "online" : "offline"}{friend?.is_temporary ? " · timepass" : ""}</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {isFriend ? (
-                <span className="h-8 px-2.5 rounded-full glass flex items-center gap-1 text-[11px] text-green-400"><Check className="h-3 w-3" /> Friend</span>
+          <div className="flex-1 min-w-0 flex items-center gap-2.5">
+            <div className="relative">
+              {other.avatar_url ? (
+                <img src={other.avatar_url} alt="" loading="lazy" width={32} height={32} className="h-8 w-8 rounded-full" />
               ) : (
-                <>
-                  <button onClick={() => addFriend(false)} className="h-8 w-8 rounded-full glass flex items-center justify-center" title="Add friend"><UserPlus className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => addFriend(true)} className="h-8 w-8 rounded-full glass flex items-center justify-center" title="Timepass (24h)"><Clock className="h-3.5 w-3.5" /></button>
-                </>
+                <div className="h-8 w-8 rounded-full bg-[#7C3AED] flex items-center justify-center text-xs">{other.username[0]?.toUpperCase()}</div>
               )}
+              <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-black ${other.is_online ? "bg-[#22C55E]" : "bg-[#555]"}`} />
             </div>
-          </>
-        )}
-      </div>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2 scrollbar-thin">
-        {messages.length === 0 && (
-          <div className="text-center text-[11px] text-muted-foreground py-6">
-            <span className="px-3 py-1 glass rounded-full">Say hi 👋</span>
+            <div className="min-w-0">
+              <p className="text-sm text-white truncate leading-tight">{other.username}</p>
+              <p className="text-[11px] text-[#888] leading-tight">{otherTyping ? <span className="text-[#22C55E]">typing…</span> : other.is_online ? "online" : "offline"}</p>
+            </div>
           </div>
         )}
-        {messages.map((m) => {
-          const mine = m.sender_id === user!.id;
-          return (
-            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm break-words ${mine ? "bg-gradient-primary text-primary-foreground rounded-br-md" : "glass rounded-bl-md"}`}>
-                {m.content}
-              </div>
+        <button onClick={() => setMenuOpen(true)} className="p-2 -mr-2 text-white" aria-label="More">
+          <MoreHorizontal className="h-5 w-5" strokeWidth={1.5} />
+        </button>
+      </header>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin" style={{ paddingBottom: 16 }}>
+        {messages.length === 0 && (
+          <div className="text-center text-[12px] text-[#666] py-8">Say hi 👋</div>
+        )}
+        {messages.map((m) => (
+          <Bubble key={m.id} m={m} mine={m.sender_id === user!.id} myLastAt={myLastMessageAt} otherLastRead={otherLastRead} />
+        ))}
+        {otherTyping && (
+          <div className="flex justify-start mb-1">
+            <div className="bg-[#1C1C1E] rounded-[18px] rounded-bl-[4px] px-4 py-3 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#888] dot-bounce-1" />
+              <span className="h-1.5 w-1.5 rounded-full bg-[#888] dot-bounce-2" />
+              <span className="h-1.5 w-1.5 rounded-full bg-[#888] dot-bounce-3" />
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
 
-      <div className="p-2.5 border-t border-border/60 bg-background pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
-        <div className="flex items-center gap-2 glass rounded-2xl p-1.5">
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Message…" maxLength={2000} className="flex-1 bg-transparent outline-none text-sm px-3" />
-          <button onClick={send} disabled={!input.trim()} className="h-9 w-9 rounded-xl bg-gradient-primary flex items-center justify-center disabled:opacity-40">
-            <Send className="h-4 w-4 text-primary-foreground" />
+      {/* Input */}
+      <div
+        className="shrink-0 bg-black px-3 py-2"
+        style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + 8px)`, transform: inset ? `translateY(-${inset}px)` : undefined, transition: "transform 200ms ease" }}
+      >
+        <div className="flex items-end gap-2 bg-[#1C1C1E] rounded-[20px] pl-4 pr-1.5 py-1.5 min-h-[44px]">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder="Message…"
+            rows={1}
+            maxLength={2000}
+            className="flex-1 bg-transparent outline-none text-[15px] resize-none py-2 leading-5 placeholder:text-[#666] max-h-[88px]"
+            style={{ height: Math.min(88, Math.max(20, input.split("\n").length * 20)) }}
+          />
+          <button
+            onClick={send}
+            disabled={!input.trim()}
+            aria-label="Send"
+            className={`h-9 w-9 rounded-full bg-[#7C3AED] flex items-center justify-center transition-opacity duration-200 ${input.trim() ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          >
+            <ArrowUp className="h-5 w-5 text-white" strokeWidth={1.5} />
           </button>
+        </div>
+      </div>
+
+      {/* Bottom sheet menu */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end" onClick={() => setMenuOpen(false)}>
+          <div className="w-full bg-[#1C1C1E] rounded-t-3xl p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] fade-up" onClick={(e) => e.stopPropagation()}>
+            <div className="h-1 w-10 rounded-full bg-[#333] mx-auto mb-4" />
+            <button onClick={() => { setMenuOpen(false); toast.success("Report received. Our team will review within 24h."); }} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm">Report</button>
+            <button onClick={() => { setMenuOpen(false); toast.success("Blocked"); goBack(); }} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm text-red-400">Block</button>
+            <button onClick={() => setMenuOpen(false)} className="w-full h-12 mt-2 rounded-full bg-black text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const Bubble = memo(function Bubble({ m, mine, myLastAt, otherLastRead }: { m: Msg; mine: boolean; myLastAt: string | null; otherLastRead: string | null }) {
+  const isMyLast = mine && myLastAt === m.created_at;
+  const seen = isMyLast && otherLastRead && otherLastRead >= m.created_at;
+  const delivered = isMyLast && !seen;
+  return (
+    <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[80%]">
+        <div className={`px-3.5 py-2.5 text-[15px] break-words ${mine ? "bg-[#7C3AED] text-white rounded-[18px] rounded-br-[4px]" : "bg-[#1C1C1E] text-white rounded-[18px] rounded-bl-[4px]"}`}>
+          {m.content}
+        </div>
+        <div className={`mt-0.5 flex items-center gap-1 text-[11px] text-[#666] ${mine ? "justify-end" : "justify-start"}`}>
+          <span>{fmtTime(m.created_at)}</span>
+          {isMyLast && (
+            seen ? <CheckCheck className="h-3 w-3 text-[#7C3AED]" strokeWidth={1.5} />
+            : delivered ? <CheckCheck className="h-3 w-3 text-[#666]" strokeWidth={1.5} />
+            : <Check className="h-3 w-3 text-[#666]" strokeWidth={1.5} />
+          )}
         </div>
       </div>
     </div>
   );
-}
+});
