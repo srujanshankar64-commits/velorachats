@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SafetyRouteImport } from './routes/safety'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
@@ -19,6 +20,7 @@ import { Route as AuthenticatedRandomRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
 import { Route as AuthenticatedDiscoverRouteImport } from './routes/_authenticated.discover'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated.messages.index'
+import { Route as AuthenticatedRoomsRoomIdRouteImport } from './routes/_authenticated.rooms.$roomId'
 import { Route as AuthenticatedMessagesUserIdRouteImport } from './routes/_authenticated.messages.$userId'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -29,6 +31,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const SafetyRoute = SafetyRouteImport.update({
   id: '/safety',
   path: '/safety',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -71,6 +78,12 @@ const AuthenticatedMessagesIndexRoute =
     path: '/messages/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRoomsRoomIdRoute =
+  AuthenticatedRoomsRoomIdRouteImport.update({
+    id: '/$roomId',
+    path: '/$roomId',
+    getParentRoute: () => AuthenticatedRoomsRoute,
+  } as any)
 const AuthenticatedMessagesUserIdRoute =
   AuthenticatedMessagesUserIdRouteImport.update({
     id: '/messages/$userId',
@@ -81,25 +94,29 @@ const AuthenticatedMessagesUserIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/random': typeof AuthenticatedRandomRoute
-  '/rooms': typeof AuthenticatedRoomsRoute
+  '/rooms': typeof AuthenticatedRoomsRouteWithChildren
   '/messages/$userId': typeof AuthenticatedMessagesUserIdRoute
+  '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/random': typeof AuthenticatedRandomRoute
-  '/rooms': typeof AuthenticatedRoomsRoute
+  '/rooms': typeof AuthenticatedRoomsRouteWithChildren
   '/messages/$userId': typeof AuthenticatedMessagesUserIdRoute
+  '/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
 }
 export interface FileRoutesById {
@@ -107,13 +124,15 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/discover': typeof AuthenticatedDiscoverRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/random': typeof AuthenticatedRandomRoute
-  '/_authenticated/rooms': typeof AuthenticatedRoomsRoute
+  '/_authenticated/rooms': typeof AuthenticatedRoomsRouteWithChildren
   '/_authenticated/messages/$userId': typeof AuthenticatedMessagesUserIdRoute
+  '/_authenticated/rooms/$roomId': typeof AuthenticatedRoomsRoomIdRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
 }
 export interface FileRouteTypes {
@@ -121,6 +140,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/contact'
     | '/safety'
     | '/sitemap.xml'
     | '/discover'
@@ -128,11 +148,13 @@ export interface FileRouteTypes {
     | '/random'
     | '/rooms'
     | '/messages/$userId'
+    | '/rooms/$roomId'
     | '/messages/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/contact'
     | '/safety'
     | '/sitemap.xml'
     | '/discover'
@@ -140,12 +162,14 @@ export interface FileRouteTypes {
     | '/random'
     | '/rooms'
     | '/messages/$userId'
+    | '/rooms/$roomId'
     | '/messages'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/contact'
     | '/safety'
     | '/sitemap.xml'
     | '/_authenticated/discover'
@@ -153,6 +177,7 @@ export interface FileRouteTypes {
     | '/_authenticated/random'
     | '/_authenticated/rooms'
     | '/_authenticated/messages/$userId'
+    | '/_authenticated/rooms/$roomId'
     | '/_authenticated/messages/'
   fileRoutesById: FileRoutesById
 }
@@ -160,6 +185,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ContactRoute: typeof ContactRoute
   SafetyRoute: typeof SafetyRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
@@ -178,6 +204,13 @@ declare module '@tanstack/react-router' {
       path: '/safety'
       fullPath: '/safety'
       preLoaderRoute: typeof SafetyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -236,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMessagesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/rooms/$roomId': {
+      id: '/_authenticated/rooms/$roomId'
+      path: '/$roomId'
+      fullPath: '/rooms/$roomId'
+      preLoaderRoute: typeof AuthenticatedRoomsRoomIdRouteImport
+      parentRoute: typeof AuthenticatedRoomsRoute
+    }
     '/_authenticated/messages/$userId': {
       id: '/_authenticated/messages/$userId'
       path: '/messages/$userId'
@@ -246,11 +286,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedRoomsRouteChildren {
+  AuthenticatedRoomsRoomIdRoute: typeof AuthenticatedRoomsRoomIdRoute
+}
+
+const AuthenticatedRoomsRouteChildren: AuthenticatedRoomsRouteChildren = {
+  AuthenticatedRoomsRoomIdRoute: AuthenticatedRoomsRoomIdRoute,
+}
+
+const AuthenticatedRoomsRouteWithChildren =
+  AuthenticatedRoomsRoute._addFileChildren(AuthenticatedRoomsRouteChildren)
+
 interface AuthenticatedRouteChildren {
   AuthenticatedDiscoverRoute: typeof AuthenticatedDiscoverRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRandomRoute: typeof AuthenticatedRandomRoute
-  AuthenticatedRoomsRoute: typeof AuthenticatedRoomsRoute
+  AuthenticatedRoomsRoute: typeof AuthenticatedRoomsRouteWithChildren
   AuthenticatedMessagesUserIdRoute: typeof AuthenticatedMessagesUserIdRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
 }
@@ -259,7 +310,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDiscoverRoute: AuthenticatedDiscoverRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRandomRoute: AuthenticatedRandomRoute,
-  AuthenticatedRoomsRoute: AuthenticatedRoomsRoute,
+  AuthenticatedRoomsRoute: AuthenticatedRoomsRouteWithChildren,
   AuthenticatedMessagesUserIdRoute: AuthenticatedMessagesUserIdRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
 }
@@ -272,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
+  ContactRoute: ContactRoute,
   SafetyRoute: SafetyRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
