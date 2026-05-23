@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      blocked_users: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       chat_rooms: {
         Row: {
           created_at: string
@@ -55,6 +73,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contact_submissions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          name: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          name: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       friendships: {
         Row: {
@@ -169,6 +214,7 @@ export type Database = {
           age: number | null
           avatar_url: string | null
           bio: string | null
+          city: string | null
           country: string | null
           created_at: string
           gender: Database["public"]["Enums"]["gender_t"]
@@ -176,13 +222,16 @@ export type Database = {
           interests: string[] | null
           is_online: boolean
           last_seen: string
+          name: string | null
           prefer_gender: Database["public"]["Enums"]["prefer_t"]
+          state: string | null
           username: string
         }
         Insert: {
           age?: number | null
           avatar_url?: string | null
           bio?: string | null
+          city?: string | null
           country?: string | null
           created_at?: string
           gender?: Database["public"]["Enums"]["gender_t"]
@@ -190,13 +239,16 @@ export type Database = {
           interests?: string[] | null
           is_online?: boolean
           last_seen?: string
+          name?: string | null
           prefer_gender?: Database["public"]["Enums"]["prefer_t"]
+          state?: string | null
           username: string
         }
         Update: {
           age?: number | null
           avatar_url?: string | null
           bio?: string | null
+          city?: string | null
           country?: string | null
           created_at?: string
           gender?: Database["public"]["Enums"]["gender_t"]
@@ -204,8 +256,61 @@ export type Database = {
           interests?: string[] | null
           is_online?: boolean
           last_seen?: string
+          name?: string | null
           prefer_gender?: Database["public"]["Enums"]["prefer_t"]
+          state?: string | null
           username?: string
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          reason: string
+          reported_id: string
+          reporter_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason: string
+          reported_id: string
+          reporter_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason?: string
+          reported_id?: string
+          reporter_id?: string
+        }
+        Relationships: []
+      }
+      room_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          room_id?: string
+          user_id?: string
         }
         Relationships: []
       }
