@@ -14,6 +14,7 @@ import { Route as SafetyRouteImport } from './routes/safety'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRoomsRouteImport } from './routes/_authenticated.rooms'
 import { Route as AuthenticatedRandomRouteImport } from './routes/_authenticated.random'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
 import { Route as AuthenticatedDiscoverRouteImport } from './routes/_authenticated.discover'
@@ -43,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRoomsRoute = AuthenticatedRoomsRouteImport.update({
+  id: '/rooms',
+  path: '/rooms',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedRandomRoute = AuthenticatedRandomRouteImport.update({
   id: '/random',
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/discover': typeof AuthenticatedDiscoverRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/random': typeof AuthenticatedRandomRoute
+  '/rooms': typeof AuthenticatedRoomsRoute
   '/messages/$userId': typeof AuthenticatedMessagesUserIdRoute
   '/messages/': typeof AuthenticatedMessagesIndexRoute
 }
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/discover': typeof AuthenticatedDiscoverRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/random': typeof AuthenticatedRandomRoute
+  '/rooms': typeof AuthenticatedRoomsRoute
   '/messages/$userId': typeof AuthenticatedMessagesUserIdRoute
   '/messages': typeof AuthenticatedMessagesIndexRoute
 }
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/_authenticated/discover': typeof AuthenticatedDiscoverRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/random': typeof AuthenticatedRandomRoute
+  '/_authenticated/rooms': typeof AuthenticatedRoomsRoute
   '/_authenticated/messages/$userId': typeof AuthenticatedMessagesUserIdRoute
   '/_authenticated/messages/': typeof AuthenticatedMessagesIndexRoute
 }
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/discover'
     | '/profile'
     | '/random'
+    | '/rooms'
     | '/messages/$userId'
     | '/messages/'
   fileRoutesByTo: FileRoutesByTo
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/discover'
     | '/profile'
     | '/random'
+    | '/rooms'
     | '/messages/$userId'
     | '/messages'
   id:
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/_authenticated/discover'
     | '/_authenticated/profile'
     | '/_authenticated/random'
+    | '/_authenticated/rooms'
     | '/_authenticated/messages/$userId'
     | '/_authenticated/messages/'
   fileRoutesById: FileRoutesById
@@ -189,6 +201,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/rooms': {
+      id: '/_authenticated/rooms'
+      path: '/rooms'
+      fullPath: '/rooms'
+      preLoaderRoute: typeof AuthenticatedRoomsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/random': {
       id: '/_authenticated/random'
       path: '/random'
@@ -231,6 +250,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDiscoverRoute: typeof AuthenticatedDiscoverRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRandomRoute: typeof AuthenticatedRandomRoute
+  AuthenticatedRoomsRoute: typeof AuthenticatedRoomsRoute
   AuthenticatedMessagesUserIdRoute: typeof AuthenticatedMessagesUserIdRoute
   AuthenticatedMessagesIndexRoute: typeof AuthenticatedMessagesIndexRoute
 }
@@ -239,6 +259,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDiscoverRoute: AuthenticatedDiscoverRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRandomRoute: AuthenticatedRandomRoute,
+  AuthenticatedRoomsRoute: AuthenticatedRoomsRoute,
   AuthenticatedMessagesUserIdRoute: AuthenticatedMessagesUserIdRoute,
   AuthenticatedMessagesIndexRoute: AuthenticatedMessagesIndexRoute,
 }
@@ -257,3 +278,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
