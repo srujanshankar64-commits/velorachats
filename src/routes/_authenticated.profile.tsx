@@ -13,8 +13,11 @@ function ProfilePage() {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [age, setAge] = useState("");
+  const [city, setCity] = useState("");
+  const [stateField, setStateField] = useState("");
   const [country, setCountry] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "other">("other");
   const [prefer, setPrefer] = useState<"male" | "female" | "any">("any");
@@ -25,8 +28,11 @@ function ProfilePage() {
     supabase.from("profiles").select("*").eq("id", user.id).single().then(({ data }) => {
       if (data) {
         setUsername(data.username ?? "");
+        setName((data as { name?: string }).name ?? "");
         setBio(data.bio ?? "");
         setAge(data.age?.toString() ?? "");
+        setCity((data as { city?: string }).city ?? "");
+        setStateField((data as { state?: string }).state ?? "");
         setCountry(data.country ?? "");
         setGender(data.gender);
         setPrefer(data.prefer_gender);
@@ -40,8 +46,11 @@ function ProfilePage() {
     const ageNum = age ? parseInt(age, 10) : null;
     const { error } = await supabase.from("profiles").update({
       username: username.trim().toLowerCase(),
+      name: name.trim() || null,
       bio: bio.slice(0, 200),
       age: ageNum,
+      city: city.trim() || null,
+      state: stateField.trim() || null,
       country: country.slice(0, 60) || null,
       gender, prefer_gender: prefer,
     }).eq("id", user.id);
@@ -57,12 +66,19 @@ function ProfilePage() {
         <h1 className="text-[20px] mb-5">Profile</h1>
 
         <div className="space-y-3">
+          <Field label="Display name">
+            <input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm" />
+          </Field>
           <Field label="Username">
-            <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
+            <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Age"><input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm" /></Field>
             <Field label="Country"><input value={country} onChange={(e) => setCountry(e.target.value)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm" /></Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="City"><input value={city} onChange={(e) => setCity(e.target.value)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm" /></Field>
+            <Field label="State"><input value={stateField} onChange={(e) => setStateField(e.target.value)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm" /></Field>
           </div>
           <Field label="I am">
             <div className="grid grid-cols-3 gap-2">
