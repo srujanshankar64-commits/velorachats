@@ -75,6 +75,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         defer: true,
         "data-zone": "11052131",
       },
+      {
+        src: "//ssp.monetag.com/tag/11052181",
+        async: true,
+      },
     ],
   }),
   shellComponent: RootShell,
