@@ -39,7 +39,7 @@ function fmtTime(iso: string) {
 function DMChat() {
   const { userId } = Route.useParams();
   const { user } = useAuth();
-  const { markRead, unreadTotal } = useUnread();
+  const { markRead, total: unreadTotal } = useUnread();
   const nav = useNavigate();
   const goBack = useCallback(() => nav({ to: "/messages" }), [nav]);
 
