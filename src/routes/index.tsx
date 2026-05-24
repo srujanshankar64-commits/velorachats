@@ -161,6 +161,7 @@ function Landing() {
           <Link to="/safety" className="hover:text-[#E8EAED]">Safety</Link>
           <Link to="/privacy" className="hover:text-[#E8EAED]">Privacy</Link>
           <Link to="/contact" className="hover:text-[#E8EAED]">Contact</Link>
+          <a href="https://omg10.com/4/11052130" target="_blank" rel="noopener" className="hover:text-[#E8EAED]">Advertise</a>
         </div>
         <span>© 2026 Velora. Late night conversations.</span>
       </footer>
