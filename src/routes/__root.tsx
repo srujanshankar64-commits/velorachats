@@ -80,7 +80,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head><HeadContent /></head>
-      <body>{children}<Scripts /></body>
+    <body>
+  {children}
+  <Scripts />
+ <script src="https://pl29539309.effectivecpmnetwork.com/cc/08/1a/cc081a752dedd62137000b1874a7118a.js"></script>
+</body>
     </html>
   );
 }
