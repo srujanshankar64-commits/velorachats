@@ -69,6 +69,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" },
     ],
+    scripts: [
+      {
+        src: "https://n6wxm.com/vignette.min.js",
+        defer: true,
+        "data-zone": "11052131",
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -83,9 +90,6 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <body>
   {children}
   <Scripts />
- <script src="https://pl29539309.effectivecpmnetwork.com/cc/08/1a/cc081a752dedd62137000b1874a7118a.js"></script>
-      <a href="https://www.effectivecpmnetwork.com/rtcp9cc8d2?key=79b4c0e5fb8e33a7f5d6599444e11d19" style={{display:'none'}} aria-hidden="true" />
-       <script src="https://pl29539307.effectivecpmnetwork.com/53/6f/cf/536fcf1b74589dbc64ae49a3d51104e0.js"></script>
 </body>
     </html>
   );
