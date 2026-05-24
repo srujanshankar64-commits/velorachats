@@ -174,23 +174,38 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          delivered_at: string | null
           id: string
+          is_deleted: boolean | null
+          read_at: string | null
+          reply_to_id: string | null
           room_id: string
           sender_id: string
+          status: string | null
         }
         Insert: {
           content: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
+          is_deleted?: boolean | null
+          read_at?: string | null
+          reply_to_id?: string | null
           room_id: string
           sender_id: string
+          status?: string | null
         }
         Update: {
           content?: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
+          is_deleted?: boolean | null
+          read_at?: string | null
+          reply_to_id?: string | null
           room_id?: string
           sender_id?: string
+          status?: string | null
         }
         Relationships: [
           {
@@ -220,8 +235,10 @@ export type Database = {
           gender: Database["public"]["Enums"]["gender_t"]
           id: string
           interests: string[] | null
+          is_blocked: boolean | null
           is_online: boolean
           last_seen: string
+          last_seen_at: string | null
           name: string | null
           prefer_gender: Database["public"]["Enums"]["prefer_t"]
           state: string | null
@@ -237,8 +254,10 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender_t"]
           id: string
           interests?: string[] | null
+          is_blocked?: boolean | null
           is_online?: boolean
           last_seen?: string
+          last_seen_at?: string | null
           name?: string | null
           prefer_gender?: Database["public"]["Enums"]["prefer_t"]
           state?: string | null
@@ -254,8 +273,10 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender_t"]
           id?: string
           interests?: string[] | null
+          is_blocked?: boolean | null
           is_online?: boolean
           last_seen?: string
+          last_seen_at?: string | null
           name?: string | null
           prefer_gender?: Database["public"]["Enums"]["prefer_t"]
           state?: string | null
@@ -271,6 +292,7 @@ export type Database = {
           reason: string
           reported_id: string
           reporter_id: string
+          resolved: boolean | null
         }
         Insert: {
           created_at?: string
@@ -279,6 +301,7 @@ export type Database = {
           reason: string
           reported_id: string
           reporter_id: string
+          resolved?: boolean | null
         }
         Update: {
           created_at?: string
@@ -287,6 +310,7 @@ export type Database = {
           reason?: string
           reported_id?: string
           reporter_id?: string
+          resolved?: boolean | null
         }
         Relationships: []
       }
