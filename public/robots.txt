@@ -1,2 +1,11 @@
 User-agent: *
 Allow: /
+Allow: /safety
+Allow: /privacy
+Disallow: /discover
+Disallow: /auth
+Disallow: /profile
+Disallow: /messages
+Disallow: /rooms
+
+Sitemap: https://velorachats.velorachats.workers.dev/sitemap.xml

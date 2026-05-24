@@ -1,22 +1,23 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Users, ShieldCheck, MapPin, Loader2 } from "lucide-react";
+import { Moon, Lock, Users, MessageCircle, Shield, MapPin, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const SITE = "https://velorachats.velorachats.workers.dev";
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Velora — Meet real people, chat instantly" },
-      { name: "description", content: "Free, safe chat to meet real people near you. Discover by city, join public rooms, message privately. No bots." },
-      { property: "og:title", content: "Velora — Meet real people, chat instantly" },
-      { property: "og:description", content: "Free, safe chat to meet real people near you." },
-      { property: "og:image", content: "/logo.jpg" },
-      { name: "twitter:image", content: "/logo.jpg" },
-      { property: "og:url", content: "https://velorachats.lovable.app/" },
+      { title: "Velora — Late night conversations" },
+      { name: "description", content: "Velora — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
+      { property: "og:title", content: "Velora — Late night conversations" },
+      { property: "og:description", content: "Late night anonymous chat. Real people. Real conversations." },
+      { property: "og:url", content: SITE + "/" },
+      { name: "twitter:url", content: SITE + "/" },
     ],
-    links: [{ rel: "canonical", href: "https://velorachats.lovable.app/" }],
+    links: [{ rel: "canonical", href: SITE + "/" }],
   }),
   component: Landing,
 });
@@ -25,21 +26,21 @@ function Landing() {
   const { user, loading } = useAuth();
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
-  const [online, setOnline] = useState<number>(1200);
+  const [online, setOnline] = useState<number>(0);
 
   useEffect(() => {
     if (!loading && user) nav({ to: "/discover" });
   }, [user, loading, nav]);
 
+  // Presence-based live count
   useEffect(() => {
-    let alive = true;
-    const tick = async () => {
-      const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true }).eq("is_online", true);
-      if (alive && typeof count === "number") setOnline(Math.max(count, 1));
-    };
-    tick();
-    const id = setInterval(tick, 10000);
-    return () => { alive = false; clearInterval(id); };
+    const ch = supabase.channel("online-users", { config: { presence: { key: "landing-" + Math.random().toString(36).slice(2) } } });
+    ch.on("presence", { event: "sync" }, () => {
+      setOnline(Object.keys(ch.presenceState()).length);
+    }).subscribe(async (status) => {
+      if (status === "SUBSCRIBED") await ch.track({ at: Date.now() });
+    });
+    return () => { ch.unsubscribe(); };
   }, []);
 
   async function cta() {
@@ -55,73 +56,113 @@ function Landing() {
     }
   }
 
+  const features = [
+    { icon: Moon, t: "Always someone awake" },
+    { icon: Lock, t: "Fully anonymous" },
+    { icon: Users, t: "Smart matching" },
+    { icon: MessageCircle, t: "Real-time chat" },
+    { icon: Shield, t: "Actually safe" },
+    { icon: MapPin, t: "Know their city" },
+  ];
+
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-black text-white">
-      <header className="h-14 px-5 flex items-center justify-between">
+    <div className="min-h-[100dvh] flex flex-col bg-[#0D0D0F] text-[#E8EAED]">
+      <header className="sticky top-0 z-30 h-[60px] px-5 flex items-center justify-between bg-[#0D0D0F] md:bg-[rgba(13,13,15,0.92)] md:backdrop-blur-xl border-b border-[rgba(255,255,255,0.06)] glass">
         <Link to="/" className="flex items-center gap-2">
-          <img src="/logo.jpg" alt="Velora" width={28} height={28} className="h-7 w-7 rounded-full" />
-          <span className="text-base">Velora</span>
+          <span className="h-7 w-7 rounded-lg bg-[#8AB4F8] text-[#0D0D0F] grid place-items-center text-sm font-semibold">V</span>
+          <span className="text-[17px]">Velora</span>
         </Link>
-        <Link to="/auth" className="text-sm text-[#888]">Sign in</Link>
+        <div className="flex items-center gap-3">
+          <Link to="/auth" className="hidden md:inline text-sm text-[#9AA0A6]">Sign in</Link>
+          <button onClick={cta} className="rounded-full bg-[#8AB4F8] text-[#0D0D0F] text-sm px-4 h-9">Get started</button>
+        </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center px-6 text-center">
-        <section className="pt-6 pb-10 flex flex-col items-center">
-          <h1 className="text-[40px] sm:text-[56px] leading-[1.05] tracking-tight max-w-xl">Meet someone real.</h1>
-          <p className="mt-3 text-[16px] text-[#888]">Instant. Anonymous. Text only.</p>
-
-          <div className="mt-5 flex items-center gap-2 text-[#22C55E] text-sm">
-            <span className="inline-block h-2 w-2 rounded-full bg-[#22C55E] pulse-dot" />
-            {online.toLocaleString()} people online right now
-          </div>
-
-          <button onClick={cta} disabled={busy} className="mt-8 w-full max-w-[360px] h-14 rounded-full bg-[#7C3AED] text-white text-base flex items-center justify-center gap-2 disabled:opacity-60 active:opacity-80">
-            {busy ? <Loader2 className="h-5 w-5 spin-slow" /> : null}
-            Start chatting free
-          </button>
-          <p className="mt-2.5 text-[12px] text-[#888]">No account needed · Free forever · 13+</p>
-        </section>
-
-        <section className="w-full max-w-3xl grid grid-cols-1 sm:grid-cols-3 gap-3 pb-10">
-          {[
-            { icon: Users, title: "Real People", body: "Verified by activity, not bots." },
-            { icon: ShieldCheck, title: "Safe & Moderated", body: "Block and report in one tap." },
-            { icon: MapPin, title: "Find Your City", body: "Discover people near you first." },
-          ].map(({ icon: Icon, title, body }) => (
-            <div key={title} className="rounded-2xl bg-[#1C1C1E] p-5 text-left">
-              <Icon className="h-5 w-5 text-[#7C3AED]" strokeWidth={1.5} />
-              <p className="mt-3 text-sm text-white">{title}</p>
-              <p className="mt-1 text-[12px] text-[#888]">{body}</p>
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="relative min-h-[85vh] md:min-h-screen flex flex-col items-center justify-center px-6 text-center"
+          style={{ background: "radial-gradient(ellipse 800px 500px at 50% -100px, rgba(138,180,248,0.06), transparent)" }}>
+          {online > 0 && (
+            <div className="mb-5 inline-flex items-center gap-2 px-3.5 h-8 rounded-full bg-accent-soft border border-[rgba(138,180,248,0.20)] text-[13px] text-[#8AB4F8]">
+              🌙 {online} {online === 1 ? "person" : "people"} talking right now
             </div>
-          ))}
+          )}
+          <h1 className="text-[40px] sm:text-[56px] leading-[1.1] tracking-tight max-w-2xl">
+            <span className="text-[#E8EAED]">For the nights you can't sleep.</span>
+            <br />
+            <span className="text-[#8AB4F8]">Real people. Real conversations.</span>
+          </h1>
+          <p className="mt-5 text-[17px] text-[#9AA0A6] max-w-xl">
+            When it's late and your mind won't stop — someone on Velora is always awake. Anonymous, free, judgment-free.
+          </p>
+          <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-sm sm:max-w-none sm:w-auto">
+            <button onClick={cta} disabled={busy}
+              className="h-[52px] px-7 rounded-full bg-[#8AB4F8] text-[#0D0D0F] text-base flex items-center justify-center gap-2 disabled:opacity-60">
+              {busy ? <Loader2 className="h-5 w-5 spin-slow" /> : null}
+              Start talking tonight
+            </button>
+            <a href="#how" className="h-[52px] px-7 rounded-full border border-[rgba(255,255,255,0.14)] text-[#E8EAED] text-base flex items-center justify-center">
+              How it works
+            </a>
+          </div>
+          <p className="mt-5 text-[13px] text-[#5F6368]">Anonymous · Always awake · No judgment</p>
         </section>
 
-        <section className="w-full max-w-3xl pb-10">
-          <h2 className="text-[18px] text-left mb-4">How it works</h2>
-          <ol className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
+        {/* Features */}
+        <section className="px-6 py-16 max-w-5xl mx-auto">
+          <h2 className="text-[28px] md:text-[36px] text-center mb-10">Built for late night conversations.</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {features.map(({ icon: Icon, t }) => (
+              <div key={t} className="rounded-2xl p-5 surface border-soft">
+                <Icon className="h-5 w-5 text-[#8AB4F8]" strokeWidth={1.5} />
+                <p className="mt-3 text-sm text-[#E8EAED]">{t}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section id="how" className="px-6 py-16 max-w-5xl mx-auto">
+          <h2 className="text-[28px] md:text-[36px] text-center mb-10">How it works</h2>
+          <ol className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[
-              { n: "1", t: "Sign up", b: "Guest or email — instant." },
-              { n: "2", t: "Set your city", b: "We show people nearby first." },
-              { n: "3", t: "Start chatting", b: "DM or join a public room." },
+              { n: "01", t: "Tell us about yourself", b: "Name, age, state. Takes 20 seconds." },
+              { n: "02", t: "We find someone awake", b: "Matched in seconds to a real person." },
+              { n: "03", t: "Talk the night away", b: "Anonymous, real-time, judgment-free." },
             ].map((s) => (
-              <li key={s.n} className="rounded-2xl bg-[#1C1C1E] p-5">
-                <span className="text-[#7C3AED] text-sm">Step {s.n}</span>
-                <p className="mt-1 text-sm">{s.t}</p>
-                <p className="mt-1 text-[12px] text-[#888]">{s.b}</p>
+              <li key={s.n} className="relative rounded-2xl p-6 surface border-soft overflow-hidden">
+                <span className="absolute -top-2 right-3 text-[64px] font-semibold text-[#8AB4F8] opacity-[0.08] leading-none select-none">{s.n}</span>
+                <p className="text-sm text-[#E8EAED]">{s.t}</p>
+                <p className="mt-2 text-[13px] text-[#9AA0A6]">{s.b}</p>
               </li>
             ))}
           </ol>
         </section>
+
+        {/* Testimonials */}
+        <section className="px-6 py-16 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              { q: "It's always 2am when my brain decides to overthink. Velora is the only place I can talk it out.", n: "Arjun M., 23, Hyderabad" },
+              { q: "Met someone from Chennai at midnight. We talked for 3 hours. Never felt less alone.", n: "Sneha K., 21, Bangalore" },
+              { q: "My friends are asleep. My family won't understand. Velora always has someone awake.", n: "Rohan S., 25, Delhi" },
+            ].map((t) => (
+              <figure key={t.n} className="rounded-2xl p-5 surface border-soft">
+                <blockquote className="text-sm text-[#E8EAED] italic leading-relaxed">"{t.q}"</blockquote>
+                <figcaption className="mt-3 text-[12px] text-[#9AA0A6]">— {t.n} <span className="text-[#8AB4F8]">★★★★★</span></figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
       </main>
 
-      <footer className="px-5 py-6 text-center text-[12px] text-[#666] flex flex-wrap justify-center gap-x-3 gap-y-2">
-        <Link to="/discover" className="hover:text-white">Discover</Link>·
-        <Link to="/rooms" className="hover:text-white">Rooms</Link>·
-        <Link to="/safety" className="hover:text-white">Safety</Link>·
-        <a href="https://www.termsfeed.com/live/1e0211fa-64de-478c-a7d9-bdd1e79c7d11" target="_blank" rel="noopener noreferrer" className="hover:text-white">Privacy</a>·
-        <a href="https://www.termsfeed.com/live/82620bf7-04c5-4f57-ac5f-7ef3f8e56a29" target="_blank" rel="noopener noreferrer" className="hover:text-white">Terms</a>·
-        <Link to="/contact" className="hover:text-white">Contact</Link>
-        <span className="w-full text-[#444] mt-2">© 2026 Velora</span>
+      <footer className="px-5 py-8 text-center text-[12px] text-[#5F6368] flex flex-col items-center gap-3 border-t border-[rgba(255,255,255,0.06)]">
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+          <Link to="/safety" className="hover:text-[#E8EAED]">Safety</Link>
+          <Link to="/privacy" className="hover:text-[#E8EAED]">Privacy</Link>
+          <Link to="/contact" className="hover:text-[#E8EAED]">Contact</Link>
+        </div>
+        <span>© 2026 Velora. Late night conversations.</span>
       </footer>
     </div>
   );
