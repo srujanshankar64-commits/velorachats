@@ -83,7 +83,9 @@ function RootShell({ children }: { children: React.ReactNode }) {
         {/* Monetag Vignette Banner */}
         <script src="https://n6wxm.com/vignette.min.js" defer data-zone="11052131"></script>
         {/* Monetag In-Page Push */}
-        <script src="//ssp.monetag.com/tag/11052181" async></script>
+       <script src="//ssp.monetag.com/tag/11052181" async></script>
+        {/* Cloudflare Web Analytics */}
+        <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "118112b5573b4eadbd1f78c0e043f479"}'></script>
       </head>
     <body>
   {children}
