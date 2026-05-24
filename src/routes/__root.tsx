@@ -85,6 +85,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
   <Scripts />
  <script src="https://pl29539309.effectivecpmnetwork.com/cc/08/1a/cc081a752dedd62137000b1874a7118a.js"></script>
       <a href="https://www.effectivecpmnetwork.com/rtcp9cc8d2?key=79b4c0e5fb8e33a7f5d6599444e11d19" style={{display:'none'}} aria-hidden="true" />
+       <script src="https://pl29539307.effectivecpmnetwork.com/53/6f/cf/536fcf1b74589dbc64ae49a3d51104e0.js"></script>
 </body>
     </html>
   );
