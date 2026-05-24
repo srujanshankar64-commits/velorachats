@@ -86,11 +86,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+        {/* Monetag Vignette Banner */}
+        <script src="https://n6wxm.com/vignette.min.js" defer data-zone="11052131"></script>
+        {/* Monetag In-Page Push */}
+        <script src="//ssp.monetag.com/tag/11052181" async></script>
+      </head>
     <body>
   {children}
   <Scripts />
