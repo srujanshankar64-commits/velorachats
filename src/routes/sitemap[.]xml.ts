@@ -1,18 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
 
-const BASE_URL = "";
+const BASE_URL = "https://velorachats.velorachats.workers.dev";
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
       GET: async () => {
         const entries = [
-          { path: "/", priority: "1.0", changefreq: "weekly" as const },
-          { path: "/discover", priority: "0.9", changefreq: "daily" as const },
-          { path: "/random", priority: "0.9", changefreq: "weekly" as const },
-          { path: "/messages", priority: "0.6", changefreq: "weekly" as const },
-          { path: "/profile", priority: "0.6", changefreq: "weekly" as const },
+          { path: "/", priority: "1.0", changefreq: "daily" as const },
+          { path: "/safety", priority: "0.6", changefreq: "monthly" as const },
+          { path: "/privacy", priority: "0.5", changefreq: "monthly" as const },
         ];
         const urls = entries
           .map((e) => `  <url><loc>${BASE_URL}${e.path}</loc><changefreq>${e.changefreq}</changefreq><priority>${e.priority}</priority></url>`)
