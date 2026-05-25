@@ -8,8 +8,8 @@ import { Loader2, ArrowLeft } from "lucide-react";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — Velora" },
-      { name: "description", content: "Sign up or sign in to Velora. Free, no email verification." },
+      { title: "Sign in — ShhChats" },
+      { name: "description", content: "Sign up or sign in to ShhChats. Free, no email verification." },
     ],
   }),
   component: AuthPage,
@@ -95,8 +95,8 @@ function AuthPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-6">
         <div className="w-full max-w-[380px]">
           <div className="flex flex-col items-center mb-6">
-            <img src="/logo.jpg" alt="Velora" width={56} height={56} className="h-14 w-14 rounded-full mb-3" />
-            <h1 className="text-[28px] text-center">Welcome to Velora</h1>
+<span className="h-14 w-14 rounded-xl bg-[#8AB4F8] text-[#0D0D0F] grid place-items-center text-3xl mb-3">🤫</span>
+         <h1 className="text-[28px] text-center">Welcome to ShhChats</h1>
           </div>
 
           {mode === "choose" ? (
