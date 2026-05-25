@@ -48,8 +48,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "ShhChats — late night anonymous chat." },
-      { name: "description", content: "Velora — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
+      { title: "ShhChats — Late night conversations" },
+      { name: "description", content: "ShhChats — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
       { name: "theme-color", content: "#0D0D0F" },
       { property: "og:site_name", content: "ShhChats" },
       { property: "og:type", content: "website" },
