@@ -8,8 +8,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/contact")({
   head: () => ({
     meta: [
-      { title: "Contact Us — Velora" },
-      { name: "description", content: "Get in touch with the Velora team." },
+      { title: "Contact Us — ShhChats" },
+      { name: "description", content: "Get in touch with the ShhChats team." },
     ],
   }),
   component: Contact,
