@@ -155,6 +155,16 @@ function RandomPage() {
           <p className="mt-1.5 text-[13px] text-[#666]">
             {elapsed > 30 ? "Taking a little longer… hang tight 🙏" : "Usually connects in under 10 seconds"}
           </p>
+          {elapsed >= 5 && (
+            <a
+              href="https://omg10.com/4/11052130"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-8 px-5 py-2.5 rounded-full border border-[#333] text-[13px] text-[#888] hover:text-[#fff] hover:border-[#555] transition-colors"
+            >
+              While you wait — check this out ✨
+            </a>
+          )}
         </div>
         <div className="pb-[calc(env(safe-area-inset-bottom)+24px)] text-center">
           <button onClick={cancel} className="text-sm text-[#888]">Cancel</button>
