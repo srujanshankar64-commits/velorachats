@@ -10,9 +10,9 @@ const SITE = "https://velorachats.velorachats.workers.dev";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Velora — Late night conversations" },
-      { name: "description", content: "Velora — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
-      { property: "og:title", content: "Velora — Late night conversations" },
+      { title: "ShhChats — Late night conversations" },
+      { name: "description", content: "ShhChats — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
+      { property: "og:title", content: "ShhChats — Late night conversations" },
       { property: "og:description", content: "Late night anonymous chat. Real people. Real conversations." },
       { property: "og:url", content: SITE + "/" },
       { name: "twitter:url", content: SITE + "/" },
@@ -69,8 +69,8 @@ function Landing() {
     <div className="min-h-[100dvh] flex flex-col bg-[#0D0D0F] text-[#E8EAED]">
       <header className="sticky top-0 z-30 h-[60px] px-5 flex items-center justify-between bg-[#0D0D0F] md:bg-[rgba(13,13,15,0.92)] md:backdrop-blur-xl border-b border-[rgba(255,255,255,0.06)] glass">
         <Link to="/" className="flex items-center gap-2">
-          <span className="h-7 w-7 rounded-lg bg-[#8AB4F8] text-[#0D0D0F] grid place-items-center text-sm font-semibold">V</span>
-          <span className="text-[17px]">Velora</span>
+          <span className="h-7 w-7 rounded-lg bg-[#8AB4F8] text-[#0D0D0F] grid place-items-center text-sm font-semibold" >🤫</span>
+          <span className="text-[17px]">ShhChats</span>
         </Link>
         <div className="flex items-center gap-3">
           <Link to="/auth" className="hidden md:inline text-sm text-[#9AA0A6]">Sign in</Link>
@@ -93,7 +93,7 @@ function Landing() {
             <span className="text-[#8AB4F8]">Real people. Real conversations.</span>
           </h1>
           <p className="mt-5 text-[17px] text-[#9AA0A6] max-w-xl">
-            When it's late and your mind won't stop — someone on Velora is always awake. Anonymous, free, judgment-free.
+            When it's late and your mind won't stop — someone on ShhChats is always awake. Anonymous, free, judgment-free.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-sm sm:max-w-none sm:w-auto">
             <button onClick={cta} disabled={busy}
@@ -143,9 +143,9 @@ function Landing() {
         <section className="px-6 py-16 max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[
-              { q: "It's always 2am when my brain decides to overthink. Velora is the only place I can talk it out.", n: "Arjun M., 23, Hyderabad" },
+              { q: "It's always 2am when my brain decides to overthink. ShhChats is the only place I can talk it out.", n: "Arjun M., 23, Hyderabad" },
               { q: "Met someone from Chennai at midnight. We talked for 3 hours. Never felt less alone.", n: "Sneha K., 21, Bangalore" },
-              { q: "My friends are asleep. My family won't understand. Velora always has someone awake.", n: "Rohan S., 25, Delhi" },
+              { q: "My friends are asleep. My family won't understand. ShhChats always has someone awake.", n: "Rohan S., 25, Delhi" },
             ].map((t) => (
               <figure key={t.n} className="rounded-2xl p-5 surface border-soft">
                 <blockquote className="text-sm text-[#E8EAED] italic leading-relaxed">"{t.q}"</blockquote>
@@ -163,7 +163,7 @@ function Landing() {
           <Link to="/contact" className="hover:text-[#E8EAED]">Contact</Link>
           <a href="https://omg10.com/4/11052130" target="_blank" rel="noopener" className="hover:text-[#E8EAED]">Advertise</a>
         </div>
-        <span>© 2026 Velora. Late night conversations.</span>
+        <span>© 2026 ShhChats. Late night conversations.</span>
       </footer>
     </div>
   );
