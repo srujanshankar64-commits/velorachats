@@ -23,7 +23,7 @@ function NotFoundComponent() {
       <div className="relative max-w-md text-center">
         <h1 className="text-2xl text-[#E8EAED]">Page not found</h1>
         <p className="mt-2 text-sm text-[#9AA0A6]">This page wandered off into the night.</p>
-        <Link to="/" className="mt-6 inline-block rounded-full bg-[#8AB4F8] px-6 py-3 text-sm text-[#0D0D0F]"Back to ShhChats</Link>
+        <Link to="/" className="mt-6 inline-block rounded-full bg-[#8AB4F8] px-6 py-3 text-sm text-[#0D0D0F]">Back to ShhChats</Link>
       </div>
     </div>
   );
@@ -51,7 +51,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "ShhChats — late night anonymous chat." },
       { name: "description", content: "Velora — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
       { name: "theme-color", content: "#0D0D0F" },
-      { property: "og:site_name", content: "Shhchats" },
+      { property: "og:site_name", content: "ShhChats" },
       { property: "og:type", content: "website" },
       { property: "og:url", content: SITE + "/" },
       { property: "og:title", content: "ShhChats — Late night conversations" },
