@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { useUnread } from "@/lib/unread";
 
 export const Route = createFileRoute("/_authenticated/messages/")({
-  head: () => ({ meta: [{ title: "Messages — Velora" }] }),
+  head: () => ({ meta: [{ title: "Messages — ShhChats" }] }),
   component: Messages,
 });
 
