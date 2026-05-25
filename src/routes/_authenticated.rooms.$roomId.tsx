@@ -71,6 +71,16 @@ function Room() {
           </div>
         ))}
       </div>
+      <div className="text-center py-1">
+          <a
+            href="https://omg10.com/4/11052130"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-[#444] hover:text-[#666] transition-colors"
+          >
+            sponsored
+          </a>
+        </div>
       <div className="shrink-0 bg-black px-3 py-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)" }}>
         <div className="flex items-end gap-2 bg-[#1C1C1E] rounded-[20px] pl-4 pr-1.5 py-1.5 min-h-[44px]">
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); send(); } }} placeholder="Message…" maxLength={1000} className="flex-1 bg-transparent outline-none text-[15px] py-2 placeholder:text-[#666]" />
