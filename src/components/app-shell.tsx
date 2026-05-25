@@ -23,8 +23,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!hideNav && (
         <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[240px] z-40 flex-col bg-[#0A0A0A] px-3 py-6">
           <Link to="/" className="flex items-center gap-2 px-3 mb-8">
-            <img src="/logo.jpg" alt="" width={28} height={28} className="h-7 w-7 rounded-full" />
-            <span className="text-base text-white">Velora</span>
+            <span className="h-7 w-7 rounded-lg bg-[#8AB4F8] text-[#0D0D0F] grid place-items-center text-sm">🤫</span>
+<span className="text-base text-white">ShhChats</span>
           </Link>
           <nav className="flex flex-col gap-0.5">
             {items.map(({ to, label, icon: Icon, showBadge }) => {
