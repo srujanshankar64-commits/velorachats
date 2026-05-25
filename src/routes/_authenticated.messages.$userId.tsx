@@ -7,6 +7,8 @@ import { useUnread } from "@/lib/unread";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { useSwipeBack } from "@/lib/use-swipe-back";
 import { toast } from "sonner";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
 
 export const Route = createFileRoute("/_authenticated/messages/$userId")({
   head: () => ({
@@ -27,6 +29,7 @@ type Msg = {
   delivered_at?: string | null;
   status?: string;
   _local?: boolean;
+  _deleting?: boolean;
 };
 type Other = { id: string; username: string; avatar_url: string | null; is_online: boolean };
 
@@ -50,11 +53,17 @@ function DMChat() {
   const [otherTyping, setOtherTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [crisis, setCrisis] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const typingTimerRef = useRef<number | null>(null);
+  
+  const isTypingRef = useRef(false);
+  const typingTimeoutRef = useRef<number | null>(null);
+  const receiverTypingTimeoutRef = useRef<number | null>(null);
+  
   const inset = useKeyboardInset();
   useSwipeBack(goBack);
 
@@ -82,24 +91,35 @@ function DMChat() {
         .from("messages")
         .select("id,sender_id,content,created_at,read_at,delivered_at,status")
         .eq("room_id", rid as string)
-        .order("created_at")
-        .limit(100);
+        .order("created_at", { ascending: false })
+        .limit(50);
       if (!active) return;
-      if (msgs) setMessages(msgs as Msg[]);
+      if (msgs) {
+        setMessages([...msgs].reverse() as Msg[]);
+      }
       markRead(userId);
 
       // Mark their messages as read now
       await supabase
         .from("messages")
-        .update({ read_at: new Date().toISOString() })
+        .update({ is_read: true, read_at: new Date().toISOString() })
         .eq("room_id", rid as string)
         .neq("sender_id", user.id)
-        .is("read_at", null);
+        .eq("is_read", false);
     })();
     return () => { active = false; };
   }, [userId, user, markRead]);
 
-  // Realtime: INSERT + UPDATE (read receipts) + typing
+  const handleDeleteMessage = useCallback((deletedId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === deletedId ? { ...m, _deleting: true } : m))
+    );
+    window.setTimeout(() => {
+      setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+    }, 400);
+  }, []);
+
+  // Realtime: INSERT + UPDATE + DELETE + typing
   useEffect(() => {
     if (!roomId || !user) return;
     const ch = supabase
@@ -109,7 +129,6 @@ function DMChat() {
         (payload) => {
           const m = payload.new as Msg;
           setMessages((prev) => {
-            // Replace optimistic local message if same content+sender within 5s
             const idx = prev.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
             if (idx >= 0) {
               const copy = prev.slice();
@@ -122,7 +141,7 @@ function DMChat() {
           if (m.sender_id !== user.id) {
             markRead(userId);
             // Auto-mark as read since chat is open
-            supabase.from("messages").update({ read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
+            supabase.from("messages").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
           }
         })
       .on("postgres_changes",
@@ -131,19 +150,32 @@ function DMChat() {
           const m = payload.new as Msg;
           setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
         })
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const oldId = (payload.old as { id: string }).id;
+          handleDeleteMessage(oldId);
+        })
       .on("broadcast", { event: "typing" }, (payload) => {
         const p = payload.payload as { from: string; typing: boolean };
         if (p.from === userId) {
           setOtherTyping(p.typing);
+          if (receiverTypingTimeoutRef.current) {
+            window.clearTimeout(receiverTypingTimeoutRef.current);
+            receiverTypingTimeoutRef.current = null;
+          }
           if (p.typing) {
-            window.setTimeout(() => setOtherTyping(false), 2500);
+            receiverTypingTimeoutRef.current = window.setTimeout(() => {
+              setOtherTyping(false);
+              receiverTypingTimeoutRef.current = null;
+            }, 4000);
           }
         }
       })
       .subscribe();
     typingChRef.current = ch;
     return () => { ch.unsubscribe(); typingChRef.current = null; };
-  }, [roomId, user, userId, markRead]);
+  }, [roomId, user, userId, markRead, handleDeleteMessage]);
 
   // Auto-scroll
   useEffect(() => {
@@ -151,23 +183,60 @@ function DMChat() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, otherTyping]);
 
-  function broadcastTyping(typing: boolean) {
+  // Close emoji picker on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setEmojiPickerOpen(false);
+      }
+    };
+    if (emojiPickerOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [emojiPickerOpen]);
+
+  const broadcastTyping = useCallback((typing: boolean) => {
     const ch = typingChRef.current;
     if (!ch || !user) return;
     ch.send({ type: "broadcast", event: "typing", payload: { from: user.id, typing } });
-  }
-  function onInputChange(v: string) {
+  }, [user]);
+
+  const onInputChange = useCallback((v: string) => {
     setInput(v);
-    broadcastTyping(true);
-    if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = window.setTimeout(() => broadcastTyping(false), 1500);
-  }
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      broadcastTyping(true);
+    }
+    if (typingTimeoutRef.current) {
+      window.clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = window.setTimeout(() => {
+      isTypingRef.current = false;
+      broadcastTyping(false);
+      typingTimeoutRef.current = null;
+    }, 2000);
+  }, [broadcastTyping]);
+
+  const handleSelectEmoji = (emoji: any) => {
+    setInput((prev) => prev + emoji.native);
+    inputRef.current?.focus();
+  };
 
   async function send() {
     const text = input.trim();
     if (!text || !roomId || !user) return;
     setInput("");
-    broadcastTyping(false);
+    
+    if (typingTimeoutRef.current) {
+      window.clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      broadcastTyping(false);
+    }
+
     if (CRISIS_RE.test(text)) setCrisis(true);
 
     // Optimistic
@@ -250,7 +319,7 @@ function DMChat() {
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin chat-scroll" style={{ paddingBottom: 16 }}>
         <div className="text-center my-3">
-          <span className="inline-block px-3 py-1 text-[11px] italic rounded-full bg-[#1A1A1F] text-[#9AA0A6] border-soft">
+          <span className="inline-block px-3 py-1 italic rounded-full bg-[#1A1A1F] text-[#9AA0A6] border-soft">
             You're both up late. Say hello 🌙
           </span>
         </div>
@@ -280,7 +349,17 @@ function DMChat() {
         className="shrink-0 bg-[#0D0D0F] px-3 py-2 border-t border-[rgba(255,255,255,0.06)]"
         style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + 8px)`, transform: inset ? `translateY(-${inset}px)` : undefined, transition: "transform 200ms ease" }}
       >
-        <div className="flex items-end gap-2 bg-[#2A2A32] rounded-[22px] pl-4 pr-1.5 py-1.5 min-h-[44px] border-soft">
+        <div className="relative flex items-end gap-2 bg-[#2A2A32] rounded-[22px] pl-4 pr-1.5 py-1.5 min-h-[44px] border-soft">
+          {emojiPickerOpen && (
+            <div ref={pickerRef} className="absolute bottom-14 right-0 z-50">
+              <Picker
+                data={data}
+                onEmojiSelect={handleSelectEmoji}
+                theme="dark"
+                set="native"
+              />
+            </div>
+          )}
           <textarea
             ref={inputRef}
             value={input}
@@ -291,6 +370,14 @@ function DMChat() {
             maxLength={2000}
             className="flex-1 bg-transparent outline-none text-[16px] resize-none py-2 leading-5 placeholder:text-[#5F6368] max-h-[120px]"
           />
+          <button
+            type="button"
+            onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
+            className="h-10 w-10 flex items-center justify-center text-[#9AA0A6] hover:text-white"
+            aria-label="Choose emoji"
+          >
+            😊
+          </button>
           <button
             onClick={send}
             disabled={!input.trim()}
@@ -326,7 +413,7 @@ const Bubble = memo(function Bubble({ m, mine, myLastAt }: { m: Msg; mine: boole
   const seen = !!m.read_at;
   const delivered = !!m.delivered_at;
   return (
-    <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"}`}>
+    <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"} transition-all duration-400 ease-in-out ${m._deleting ? "opacity-0 scale-95 max-h-0 mb-0 overflow-hidden" : ""}`}>
       <div className="max-w-[80%]">
         <div className={`px-3.5 py-2.5 text-[15px] break-words ${mine
             ? "bg-[#8AB4F8] text-[#0D0D0F] rounded-[18px] rounded-br-[4px]"

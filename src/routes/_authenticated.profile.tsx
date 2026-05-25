@@ -44,7 +44,8 @@ function ProfilePage() {
   async function save() {
     if (!user) return;
     const ageNum = age ? parseInt(age, 10) : null;
-    const { error } = await supabase.from("profiles").update({
+    const { error } = await supabase.from("profiles").upsert({
+      id: user.id,
       username: username.trim().toLowerCase(),
       name: name.trim() || null,
       bio: bio.slice(0, 200),
@@ -52,8 +53,9 @@ function ProfilePage() {
       city: city.trim() || null,
       state: stateField.trim() || null,
       country: country.slice(0, 60) || null,
-      gender, prefer_gender: prefer,
-    }).eq("id", user.id);
+      gender,
+      prefer_gender: prefer,
+    });
     if (error) return toast.error(error.message);
     toast.success("Saved");
   }

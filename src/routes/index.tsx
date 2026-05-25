@@ -34,13 +34,20 @@ function Landing() {
 
   // Presence-based live count
   useEffect(() => {
-    const ch = supabase.channel("online-users", { config: { presence: { key: "landing-" + Math.random().toString(36).slice(2) } } });
+    const ch = supabase.channel("global-presence");
     ch.on("presence", { event: "sync" }, () => {
       setOnline(Object.keys(ch.presenceState()).length);
-    }).subscribe(async (status) => {
-      if (status === "SUBSCRIBED") await ch.track({ at: Date.now() });
+    })
+    .on("presence", { event: "join" }, () => {
+      setOnline(Object.keys(ch.presenceState()).length);
+    })
+    .on("presence", { event: "leave" }, () => {
+      setOnline(Object.keys(ch.presenceState()).length);
     });
-    return () => { ch.unsubscribe(); };
+    ch.subscribe();
+    return () => {
+      ch.unsubscribe();
+    };
   }, []);
 
   async function cta() {

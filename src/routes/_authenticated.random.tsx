@@ -37,11 +37,65 @@ function RandomPage() {
   const inset = useKeyboardInset();
   const searchStartRef = useRef<number>(Date.now());
 
-  useEffect(() => { if (!user) return; return startPresence(user.id); }, [user]);
+  const phaseRef = useRef(phase);
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+    userRef.current = user;
+  }, [phase, user]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const u = userRef.current;
+      const p = phaseRef.current;
+      if (u && p === "searching") {
+        const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID || "uavwrahakmzmfdwqwnek";
+        const dataStr = localStorage.getItem(`sb-${projectRef}-auth-token`);
+        if (dataStr) {
+          try {
+            const parsed = JSON.parse(dataStr);
+            const token = parsed?.currentSession?.access_token;
+            if (token) {
+              fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/match_queue?user_id=eq.${u.id}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                  },
+                  keepalive: true
+                }
+              );
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
   const cleanupQueue = useCallback(() => { queueChRef.current?.unsubscribe(); queueChRef.current = null; }, []);
   const cleanupMsgs = useCallback(() => { msgChRef.current?.unsubscribe(); msgChRef.current = null; }, []);
-  useEffect(() => () => { cleanupQueue(); cleanupMsgs(); }, [cleanupQueue, cleanupMsgs]);
+
+  useEffect(() => {
+    return () => {
+      cleanupQueue();
+      cleanupMsgs();
+      const u = userRef.current;
+      const p = phaseRef.current;
+      if (u && p === "searching") {
+        supabase.from("match_queue").delete().eq("user_id", u.id).then(() => {});
+      }
+    };
+  }, [cleanupQueue, cleanupMsgs]);
 
   const enterRoom = useCallback(async (rid: string) => {
     if (!user) return;

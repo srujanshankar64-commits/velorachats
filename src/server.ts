@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { supabaseAdmin } from "./integrations/supabase/client.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -75,6 +76,16 @@ export default {
     } catch (error) {
       console.error(error);
       return brandedErrorResponse();
+    }
+  },
+  async scheduled(event: unknown, env: unknown, ctx: unknown) {
+    try {
+      const { error } = await supabaseAdmin.rpc("cleanup_old_messages");
+      if (error) {
+        console.error("Error running cleanup_old_messages RPC:", error.message);
+      }
+    } catch (e) {
+      console.error("Scheduled worker error:", e);
     }
   },
 };
