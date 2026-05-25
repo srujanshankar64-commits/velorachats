@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/profile")({
-  head: () => ({ meta: [{ title: "Profile — Velora" }] }),
+  head: () => ({ meta: [{ title: "Profile — ShhChats" }] }),
   component: ProfilePage,
 });
 
