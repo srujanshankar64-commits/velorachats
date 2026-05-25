@@ -61,7 +61,7 @@ function DMChat() {
   // Tab title badge
   useEffect(() => {
     document.title = unreadTotal > 0 ? `(${unreadTotal}) Velora` : "Velora";
-    return () => { document.title = "Velora"; };
+    return () => { document.title = "ShhChats"; };
   }, [unreadTotal]);
 
   // Load room + profile + history
