@@ -4,10 +4,10 @@ import { ArrowLeft } from "lucide-react";
 export const Route = createFileRoute("/safety")({
   head: () => ({
     meta: [
-      { title: "Safety at Velora" },
-      { name: "description", content: "Community guidelines, reporting, and privacy at Velora." },
-      { property: "og:title", content: "Safety at Velora" },
-      { property: "og:description", content: "How we keep Velora safe and private." },
+      { title: "Safety at ShhChats" },
+      { name: "description", content: "Community guidelines, reporting, and privacy at ShhChats." },
+      { property: "og:title", content: "Safety at ShhChats" },
+      { property: "og:description", content: "How we keep ShhChats safe and private." },
       { property: "og:url", content: "https://velorachats.lovable.app/safety" },
     ],
     links: [{ rel: "canonical", href: "https://velorachats.lovable.app/safety" }],
@@ -22,7 +22,7 @@ function SafetyPage() {
         <Link to="/" className="p-2 -ml-2 text-[#888]"><ArrowLeft className="h-5 w-5" strokeWidth={1.5} /></Link>
       </header>
       <main className="px-6 pb-12 max-w-xl mx-auto">
-        <h1 className="text-[32px] mb-8">Safety at Velora</h1>
+        <h1 className="text-[32px] mb-8">Safety at ShhChats</h1>
         <Section title="Community guidelines">
           Be kind. No harassment. No explicit content. No sharing personal info.
         </Section>
@@ -33,7 +33,7 @@ function SafetyPage() {
           We don't store your messages longer than needed. Guest sessions are anonymous. No data is sold.
         </Section>
         <Section title="Contact">
-          <a className="text-[#7C3AED]" href="mailto:safety@velorachats.com">safety@velorachats.com</a>
+          <a className="text-[#7C3AED]" href="mailto:safety@shhchats.in">safety@shhchats.in</a>
         </Section>
       </main>
     </div>
