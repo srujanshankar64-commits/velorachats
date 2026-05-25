@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/discover")({
-  head: () => ({ meta: [{ title: "Discover — Velora" }] }),
+  head: () => ({ meta: [{ title: "Discover — ShhChats" }] }),
   component: Discover,
 });
 
