@@ -34,6 +34,26 @@ function Messages() {
   const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const ch = supabase.channel("global-presence");
+    const updateOnlineList = () => {
+      const state = ch.presenceState();
+      const onlineMap: Record<string, boolean> = {};
+      Object.keys(state).forEach((key) => {
+        onlineMap[key] = true;
+      });
+      setOnlineUsers(onlineMap);
+    };
+    ch.on("presence", { event: "sync" }, updateOnlineList)
+      .on("presence", { event: "join" }, updateOnlineList)
+      .on("presence", { event: "leave" }, updateOnlineList)
+      .subscribe();
+    return () => {
+      ch.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -103,7 +123,7 @@ function Messages() {
                 otherId={r.other.id}
                 username={r.other.username}
                 avatar={r.other.avatar_url}
-                online={r.other.is_online}
+                online={!!onlineUsers[r.other.id]}
                 last={r.last}
                 myId={user!.id}
                 otherLastRead={r.otherLastRead ?? null}

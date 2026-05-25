@@ -54,6 +54,7 @@ function DMChat() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [crisis, setCrisis] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [isPartnerOnline, setIsPartnerOnline] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -109,6 +110,22 @@ function DMChat() {
     })();
     return () => { active = false; };
   }, [userId, user, markRead]);
+
+  // Real-time presence status listener for the partner
+  useEffect(() => {
+    const ch = supabase.channel("global-presence");
+    const updateStatus = () => {
+      const state = ch.presenceState();
+      setIsPartnerOnline(!!state[userId]);
+    };
+    ch.on("presence", { event: "sync" }, updateStatus)
+      .on("presence", { event: "join" }, updateStatus)
+      .on("presence", { event: "leave" }, updateStatus)
+      .subscribe();
+    return () => {
+      ch.unsubscribe();
+    };
+  }, [userId]);
 
   const handleDeleteMessage = useCallback((deletedId: string) => {
     setMessages((prev) =>
@@ -299,12 +316,12 @@ function DMChat() {
               ) : (
                 <div className="h-9 w-9 rounded-full bg-[#8AB4F8] text-[#0D0D0F] flex items-center justify-center text-sm font-semibold">{other.username[0]?.toUpperCase()}</div>
               )}
-              <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#1A1A1F] ${other.is_online ? "bg-[#4ADE80]" : "bg-[#5F6368]"}`} />
+              <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#1A1A1F] ${isPartnerOnline ? "bg-[#4ADE80]" : "bg-[#5F6368]"}`} />
             </div>
             <div className="min-w-0">
               <p className="text-sm text-[#E8EAED] truncate leading-tight">{other.username}</p>
               <p className="text-[11px] text-[#9AA0A6] leading-tight">
-                {otherTyping ? <span className="text-[#4ADE80]">typing…</span> : other.is_online ? "online" : "offline"}
+                {otherTyping ? <span className="text-[#4ADE80]">typing…</span> : isPartnerOnline ? "online" : "offline"}
               </p>
             </div>
           </div>

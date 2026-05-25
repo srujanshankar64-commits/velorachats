@@ -18,7 +18,7 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const nav = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const [mode, setMode] = useState<"choose" | "email">("choose");
+  const [mode, setMode] = useState<"choose" | "email" | "guest-form">("choose");
   const [tab, setTab] = useState<"signup" | "signin">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,14 +35,44 @@ function AuthPage() {
     if (!authLoading && user) nav({ to: "/discover" });
   }, [user, authLoading, nav]);
 
-  async function guest() {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("guest") === "true") {
+        setMode("guest-form");
+      }
+    }
+  }, []);
+
+  function guest() {
+    setMode("guest-form");
+  }
+
+  async function handleGuestSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signInAnonymously();
+      if (!username.trim() || username.length < 3) throw new Error("Username must be at least 3 characters");
+      const ageNum = age ? parseInt(age, 10) : null;
+      if (ageNum !== null && (ageNum < 13 || ageNum > 100)) throw new Error("Age must be between 13 and 100");
+
+      const { error } = await supabase.auth.signInAnonymously({
+        options: {
+          data: {
+            username: username.trim().toLowerCase(),
+            name: name.trim() || null,
+            age: ageNum?.toString() ?? "",
+            gender,
+            city: city.trim() || null,
+            state: stateField.trim() || null,
+          },
+        },
+      });
       if (error) throw error;
       nav({ to: "/discover" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not start guest");
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
       setBusy(false);
     }
   }
@@ -101,8 +131,8 @@ function AuthPage() {
 
           {mode === "choose" ? (
             <>
-              <button onClick={guest} disabled={busy} className="w-full h-14 rounded-full bg-[#7C3AED] text-white text-base flex items-center justify-center gap-2 disabled:opacity-60">
-                {busy && <Loader2 className="h-5 w-5 spin-slow" />} Continue as guest
+              <button onClick={guest} className="w-full h-14 rounded-full bg-[#7C3AED] text-white text-base flex items-center justify-center gap-2">
+                Continue as guest
               </button>
               <p className="mt-2.5 text-[12px] text-[#888] text-center">No email needed</p>
 
@@ -115,6 +145,29 @@ function AuthPage() {
               <button onClick={() => setMode("email")} className="w-full h-14 rounded-full bg-transparent border border-white/30 text-white text-base">
                 Sign up with email
               </button>
+            </>
+          ) : mode === "guest-form" ? (
+            <>
+              <form onSubmit={handleGuestSubmit} className="space-y-2.5">
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Display name" required className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
+                <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" required minLength={3} maxLength={20} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" min={13} max={100} value={age} onChange={(e) => setAge(e.target.value)} placeholder="Age" required className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
+                  <select value={gender} onChange={(e) => setGender(e.target.value as any)} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm">
+                    <option value="other">Other</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
+                  <input value={stateField} onChange={(e) => setStateField(e.target.value)} placeholder="State" className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
+                </div>
+                <button type="submit" disabled={busy} className="w-full h-14 rounded-full bg-[#7C3AED] text-white text-base flex items-center justify-center gap-2">
+                  {busy && <Loader2 className="h-5 w-5 spin-slow" />} Let's chat
+                </button>
+              </form>
+              <button onClick={() => setMode("choose")} className="mt-4 w-full text-[13px] text-[#888]">← Back to options</button>
             </>
           ) : (
             <>

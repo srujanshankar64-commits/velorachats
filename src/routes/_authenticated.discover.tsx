@@ -19,22 +19,69 @@ function Discover() {
   const [filter, setFilter] = useState<"online" | "all">("online");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const ch = supabase.channel("global-presence");
+    const updateOnlineList = () => {
+      const state = ch.presenceState();
+      const onlineMap: Record<string, boolean> = {};
+      Object.keys(state).forEach((key) => {
+        onlineMap[key] = true;
+      });
+      setOnlineUsers(onlineMap);
+    };
+    ch.on("presence", { event: "sync" }, updateOnlineList)
+      .on("presence", { event: "join" }, updateOnlineList)
+      .on("presence", { event: "leave" }, updateOnlineList)
+      .subscribe();
+    return () => {
+      ch.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
     let active = true;
     setLoading(true);
+
+    const onlineIds = Object.keys(onlineUsers).filter(id => id !== user.id);
+
     let query = supabase.from("profiles").select("id,username,avatar_url,bio,is_online").neq("id", user.id).limit(80);
-    if (filter === "online") query = query.eq("is_online", true);
-    if (q.trim()) query = query.ilike("username", `%${q.trim()}%`);
-    query.order("is_online", { ascending: false }).order("last_seen", { ascending: false }).then(({ data, error }) => {
+    
+    if (filter === "online") {
+      if (onlineIds.length === 0) {
+        setProfiles([]);
+        setLoading(false);
+        return;
+      }
+      query = query.in("id", onlineIds);
+    }
+    
+    if (q.trim()) {
+      query = query.ilike("username", `%${q.trim()}%`);
+    }
+
+    query.then(({ data, error }) => {
       if (!active) return;
       if (error) toast.error(error.message);
-      setProfiles((data ?? []) as Profile[]);
+      
+      const mapped = (data ?? []).map((p) => ({
+        ...p,
+        is_online: !!onlineUsers[p.id],
+      }));
+      
+      mapped.sort((a, b) => {
+        if (a.is_online && !b.is_online) return -1;
+        if (!a.is_online && b.is_online) return 1;
+        return a.username.localeCompare(b.username);
+      });
+
+      setProfiles(mapped as Profile[]);
       setLoading(false);
     });
     return () => { active = false; };
-  }, [user, filter, q]);
+  }, [user, filter, q, onlineUsers]);
 
   const list = useMemo(() => profiles, [profiles]);
 

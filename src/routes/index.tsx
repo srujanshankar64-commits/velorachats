@@ -52,15 +52,7 @@ function Landing() {
 
   async function cta() {
     if (user) return nav({ to: "/discover" });
-    setBusy(true);
-    try {
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) throw error;
-      nav({ to: "/discover" });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not start");
-      setBusy(false);
-    }
+    window.location.href = "/auth?guest=true";
   }
 
   const features = [

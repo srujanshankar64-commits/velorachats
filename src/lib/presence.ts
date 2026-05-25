@@ -25,17 +25,39 @@ export function startPresence(userId: string) {
       .eq("id", userId);
   };
 
-  presenceChannel.subscribe(async (status) => {
-    if (status === "SUBSCRIBED") {
+  const track = async () => {
+    if (presenceChannel.state === "joined" || presenceChannel.state === "joining") {
       await presenceChannel.track({
         user_id: userId,
         online_at: new Date().toISOString(),
       });
       await markOnline();
     }
+  };
+
+  const untrack = async () => {
+    await presenceChannel.untrack();
+    await markOffline();
+  };
+
+  presenceChannel.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") {
+      await track();
+    }
   });
 
-  // 3. Handle window beforeunload (tab close)
+  // Handle visibility change (tab hidden/visible)
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      untrack();
+    } else {
+      track();
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  // Handle window beforeunload (tab close)
   const handleUnload = () => {
     const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID || "uavwrahakmzmfdwqwnek";
     const dataStr = localStorage.getItem(`sb-${projectRef}-auth-token`);
@@ -66,6 +88,7 @@ export function startPresence(userId: string) {
   window.addEventListener("beforeunload", handleUnload);
 
   return () => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
     window.removeEventListener("beforeunload", handleUnload);
     presenceChannel.untrack().then(() => {
       presenceChannel.unsubscribe();
