@@ -23,7 +23,7 @@ function NotFoundComponent() {
       <div className="relative max-w-md text-center">
         <h1 className="text-2xl text-[#E8EAED]">Page not found</h1>
         <p className="mt-2 text-sm text-[#9AA0A6]">This page wandered off into the night.</p>
-        <Link to="/" className="mt-6 inline-block rounded-full bg-[#8AB4F8] px-6 py-3 text-sm text-[#0D0D0F]">Back to Velora</Link>
+        <Link to="/" className="mt-6 inline-block rounded-full bg-[#8AB4F8] px-6 py-3 text-sm text-[#0D0D0F]"Back to ShhChats</Link>
       </div>
     </div>
   );
@@ -48,13 +48,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Velora — Late night conversations" },
+      { title: "ShhChats — late night anonymous chat." },
       { name: "description", content: "Velora — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
       { name: "theme-color", content: "#0D0D0F" },
-      { property: "og:site_name", content: "Velora" },
+      { property: "og:site_name", content: "Shhchats" },
       { property: "og:type", content: "website" },
       { property: "og:url", content: SITE + "/" },
-      { property: "og:title", content: "Velora — Late night conversations" },
+      { property: "og:title", content: "ShhChats — Late night conversations" },
       { property: "og:description", content: "Talk to a real person when your mind won't stop. Free and anonymous." },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:url", content: SITE + "/" },
