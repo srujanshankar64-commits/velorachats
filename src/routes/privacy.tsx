@@ -6,9 +6,9 @@ const SITE = "https://velorachats.velorachats.workers.dev";
 export const Route = createFileRoute("/privacy")({
   head: () => ({
     meta: [
-      { title: "Privacy — Velora" },
-      { name: "description", content: "Velora privacy policy." },
-      { property: "og:title", content: "Privacy — Velora" },
+      { title: "Privacy — ShhChats" },
+      { name: "description", content: "ShhChats privacy policy." },
+      { property: "og:title", content: "Privacy — ShhChats" },
       { property: "og:url", content: SITE + "/privacy" },
       { name: "twitter:url", content: SITE + "/privacy" },
     ],
@@ -36,7 +36,7 @@ function Privacy() {
       <main className="max-w-2xl mx-auto px-4 pb-10 space-y-3">
         <p className="text-xs text-3">Last updated January 2026</p>
         <Card title="What we collect">
-          <p>Display name, age, state, gender, optional email, and messages you send. We log basic technical data (device, time) to keep Velora safe.</p>
+          <p>Display name, age, state, gender, optional email, and messages you send. We log basic technical data (device, time) to keep ShhChats safe.</p>
         </Card>
         <Card title="How we use it">
           <p>To match you with people, deliver messages in real time, and review reports of abuse. Nothing else.</p>
@@ -54,7 +54,7 @@ function Privacy() {
           <p>We only use localStorage on your device to keep you signed in. No third-party tracking cookies.</p>
         </Card>
         <Card title="Contact">
-          <p>privacy@velorachats.com</p>
+          <p>privacy@shhchats.com</p>
         </Card>
       </main>
     </div>
