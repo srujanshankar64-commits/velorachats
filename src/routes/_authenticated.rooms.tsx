@@ -4,8 +4,8 @@ import { Heart, Users, Globe } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/rooms")({
   head: () => ({
     meta: [
-      { title: "Rooms — Velora" },
-      { name: "description", content: "Join public chat rooms on Velora: Dating, Friendship, and Open chat." },
+      { title: "Rooms — ShhChats" },
+      { name: "description", content: "Join public chat rooms on ShhChats: Dating, Friendship, and Open chat." },
     ],
   }),
   component: Rooms,
