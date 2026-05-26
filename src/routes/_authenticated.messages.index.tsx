@@ -87,6 +87,7 @@ function Messages() {
     const ch = supabase.channel("messages-index-profiles-sync")
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload) => {
         const updated = payload.new as RoomRow["other"];
+        if (!updated) return;
         setRooms((prev) =>
           prev.map((r) => {
             if (r.other && r.other.id === updated.id) {

@@ -19,6 +19,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRoomsRouteImport } from './routes/_authenticated.rooms'
 import { Route as AuthenticatedRandomRouteImport } from './routes/_authenticated.random'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated.profile'
+import { Route as AuthenticatedFriendsRouteImport } from './routes/_authenticated.friends'
 import { Route as AuthenticatedDiscoverRouteImport } from './routes/_authenticated.discover'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated.messages.index'
 import { Route as AuthenticatedRoomsRoomIdRouteImport } from './routes/_authenticated.rooms.$roomId'
@@ -73,6 +74,11 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedFriendsRoute = AuthenticatedFriendsRouteImport.update({
+  id: '/friends',
+  path: '/friends',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedDiscoverRoute = AuthenticatedDiscoverRouteImport.update({
   id: '/discover',
   path: '/discover',
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/discover': typeof AuthenticatedDiscoverRoute
+  '/friends': typeof AuthenticatedFriendsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/random': typeof AuthenticatedRandomRoute
   '/rooms': typeof AuthenticatedRoomsRouteWithChildren
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/discover': typeof AuthenticatedDiscoverRoute
+  '/friends': typeof AuthenticatedFriendsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/random': typeof AuthenticatedRandomRoute
   '/rooms': typeof AuthenticatedRoomsRouteWithChildren
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/discover': typeof AuthenticatedDiscoverRoute
+  '/_authenticated/friends': typeof AuthenticatedFriendsRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/random': typeof AuthenticatedRandomRoute
   '/_authenticated/rooms': typeof AuthenticatedRoomsRouteWithChildren
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/safety'
     | '/sitemap.xml'
     | '/discover'
+    | '/friends'
     | '/profile'
     | '/random'
     | '/rooms'
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/safety'
     | '/sitemap.xml'
     | '/discover'
+    | '/friends'
     | '/profile'
     | '/random'
     | '/rooms'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/safety'
     | '/sitemap.xml'
     | '/_authenticated/discover'
+    | '/_authenticated/friends'
     | '/_authenticated/profile'
     | '/_authenticated/random'
     | '/_authenticated/rooms'
@@ -275,6 +287,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/friends': {
+      id: '/_authenticated/friends'
+      path: '/friends'
+      fullPath: '/friends'
+      preLoaderRoute: typeof AuthenticatedFriendsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/discover': {
       id: '/_authenticated/discover'
       path: '/discover'
@@ -319,6 +338,7 @@ const AuthenticatedRoomsRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedDiscoverRoute: typeof AuthenticatedDiscoverRoute
+  AuthenticatedFriendsRoute: typeof AuthenticatedFriendsRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRandomRoute: typeof AuthenticatedRandomRoute
   AuthenticatedRoomsRoute: typeof AuthenticatedRoomsRouteWithChildren
@@ -328,6 +348,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDiscoverRoute: AuthenticatedDiscoverRoute,
+  AuthenticatedFriendsRoute: AuthenticatedFriendsRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRandomRoute: AuthenticatedRandomRoute,
   AuthenticatedRoomsRoute: AuthenticatedRoomsRouteWithChildren,
@@ -351,3 +372,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

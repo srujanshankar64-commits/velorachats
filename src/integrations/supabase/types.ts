@@ -177,6 +177,7 @@ export type Database = {
           delivered_at: string | null
           id: string
           is_deleted: boolean | null
+          is_read: boolean
           read_at: string | null
           reply_to_id: string | null
           room_id: string
@@ -189,6 +190,7 @@ export type Database = {
           delivered_at?: string | null
           id?: string
           is_deleted?: boolean | null
+          is_read?: boolean
           read_at?: string | null
           reply_to_id?: string | null
           room_id: string
@@ -201,6 +203,7 @@ export type Database = {
           delivered_at?: string | null
           id?: string
           is_deleted?: boolean | null
+          is_read?: boolean
           read_at?: string | null
           reply_to_id?: string | null
           room_id?: string
@@ -361,6 +364,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_messages: {
+        Args: Record<string, never>
+        Returns: undefined
+      }
       find_or_enqueue_match: {
         Args: {
           p_gender: Database["public"]["Enums"]["gender_t"]
