@@ -1,0 +1,78 @@
+import { Link, useRouterState } from "@tanstack/react-router";
+import { MessageCircle, Compass, Hash, User, Users } from "lucide-react";
+import { useUnread } from "@/lib/unread";
+
+const items: Array<{ to: "/discover" | "/friends" | "/messages" | "/rooms" | "/profile"; label: string; icon: typeof Compass; showBadge?: boolean }> = [
+  { to: "/discover", label: "Discover", icon: Compass },
+  { to: "/friends", label: "Friends", icon: Users },
+  { to: "/messages", label: "Chats", icon: MessageCircle, showBadge: true },
+  { to: "/rooms", label: "Rooms", icon: Hash },
+  { to: "/profile", label: "Me", icon: User },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { total } = useUnread();
+
+  const inDmChat = /^\/messages\/[^/]+/.test(pathname);
+  const inRandomChat = pathname === "/random";
+  const inRoomChat = /^\/rooms\/[^/]+/.test(pathname);
+  const hideNav = inDmChat || inRandomChat || inRoomChat;
+
+  return (
+    <div className="min-h-[100dvh] bg-black text-white">
+      {!hideNav && (
+        <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[240px] z-40 flex-col bg-[#0A0A0A] px-3 py-6">
+          <Link to="/" className="flex items-center gap-2 px-3 mb-8">
+            <span className="h-7 w-7 rounded-lg bg-[#8AB4F8] text-[#0D0D0F] grid place-items-center text-sm">🤫</span>
+<span className="text-base text-white">ShhChats</span>
+          </Link>
+          <nav className="flex flex-col gap-0.5">
+            {items.map(({ to, label, icon: Icon, showBadge }) => {
+              const active = pathname === to || pathname.startsWith(to + "/");
+              return (
+                <Link key={to} to={to} className={`relative flex items-center gap-3 px-3 h-11 rounded-full ${active ? "bg-[#1C1C1E] text-white" : "text-[#888] hover:text-white"}`}>
+                  <Icon className="h-5 w-5" strokeWidth={1.5} />
+                  <span className="text-sm">{label}</span>
+                  {showBadge && total > 0 && (
+                    <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-[#7C3AED] text-[10px] text-white flex items-center justify-center">{total > 99 ? "99+" : total}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="mt-auto px-3 text-[11px] text-[#555] space-y-1">
+            <Link to="/safety" className="block">Safety</Link>
+            <Link to="/contact" className="block">Contact</Link>
+            <a href="https://www.termsfeed.com/live/82620bf7-04c5-4f57-ac5f-7ef3f8e56a29" target="_blank" rel="noopener noreferrer" className="block">Terms</a>
+            <a href="https://www.termsfeed.com/live/1e0211fa-64de-478c-a7d9-bdd1e79c7d11" target="_blank" rel="noopener noreferrer" className="block">Privacy</a>
+            <div className="ad-slot mt-3" data-ad-slot="XXXXXXXXXX">Ad</div>
+          </div>
+        </aside>
+      )}
+
+      <main className={`${hideNav ? "" : "md:pl-[240px] pb-[64px] md:pb-0"} min-h-[100dvh]`}>{children}</main>
+
+      {!hideNav && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black pb-[env(safe-area-inset-bottom)]">
+          <div className="flex items-center justify-around h-16">
+            {items.map(({ to, label, icon: Icon, showBadge }) => {
+              const active = pathname === to || pathname.startsWith(to + "/");
+              return (
+                <Link key={to} to={to} className={`relative flex flex-col items-center gap-1 px-4 py-1 ${active ? "text-[#7C3AED]" : "text-[#888]"}`}>
+                  <div className="relative">
+                    <Icon className="h-5 w-5" strokeWidth={1.5} />
+                    {showBadge && total > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#7C3AED] text-[9px] text-white flex items-center justify-center">{total > 9 ? "9+" : total}</span>
+                    )}
+                  </div>
+                  <span className="text-[10px]">{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,50 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
+
+export const Route = createFileRoute("/safety")({
+  head: () => ({
+    meta: [
+      { title: "Safety at ShhChats" },
+      { name: "description", content: "Community guidelines, reporting, and privacy at ShhChats." },
+      { property: "og:title", content: "Safety at ShhChats" },
+      { property: "og:description", content: "How we keep ShhChats safe and private." },
+      { property: "og:url", content: "https://velorachats.lovable.app/safety" },
+    ],
+    links: [{ rel: "canonical", href: "https://velorachats.lovable.app/safety" }],
+  }),
+  component: SafetyPage,
+});
+
+function SafetyPage() {
+  return (
+    <div className="min-h-[100dvh] bg-black text-white">
+      <header className="h-14 px-5 flex items-center">
+        <Link to="/" className="p-2 -ml-2 text-[#888]"><ArrowLeft className="h-5 w-5" strokeWidth={1.5} /></Link>
+      </header>
+      <main className="px-6 pb-12 max-w-xl mx-auto">
+        <h1 className="text-[32px] mb-8">Safety at ShhChats</h1>
+        <Section title="Community guidelines">
+          Be kind. No harassment. No explicit content. No sharing personal info.
+        </Section>
+        <Section title="How to report">
+          Tap the three dots in any chat → Report. We review all reports within 24 hours.
+        </Section>
+        <Section title="Privacy">
+          We don't store your messages longer than needed. Guest sessions are anonymous. No data is sold.
+        </Section>
+        <Section title="Contact">
+          <a className="text-[#7C3AED]" href="mailto:safety@shhchats.in">safety@shhchats.in</a>
+        </Section>
+      </main>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-8">
+      <h2 className="text-lg mb-2">{title}</h2>
+      <p className="text-[15px] text-[#888] leading-relaxed">{children}</p>
+    </section>
+  );
+}
