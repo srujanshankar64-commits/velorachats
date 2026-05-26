@@ -200,11 +200,11 @@ function DMChat() {
   }, [roomId, user, userId, markRead, handleDeleteMessage]);
 
   // Channel 2: broadcast-only channel for typing indicator
-  // Separate channel prevents broadcast config from blocking postgres_changes
+  // Set ref BEFORE subscribe to avoid race condition where user types before subscription completes
   useEffect(() => {
     if (!roomId || !user) return;
     const ch = supabase
-      .channel(`typing:${roomId}`, { config: { broadcast: { self: false } } })
+      .channel(`tc${roomId}`, { config: { broadcast: { self: false, ack: false } } })
       .on("broadcast", { event: "typing" }, (payload) => {
         const p = payload.payload as { from: string; typing: boolean };
         if (p.from === userId) {
@@ -220,9 +220,10 @@ function DMChat() {
             }, 4000);
           }
         }
-      })
-      .subscribe();
+      });
+    // Set ref BEFORE subscribe so broadcastTyping works immediately
     typingChRef.current = ch;
+    ch.subscribe();
     return () => { ch.unsubscribe(); typingChRef.current = null; };
   }, [roomId, user, userId]);
 
@@ -257,7 +258,7 @@ function DMChat() {
         return next;
       });
     };
-    const interval = window.setInterval(poll, 3000);
+    const interval = window.setInterval(poll, 1000);
     return () => window.clearInterval(interval);
   }, [roomId, user]);
 

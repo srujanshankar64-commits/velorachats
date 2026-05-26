@@ -16,23 +16,61 @@ interface UnreadCtx {
 
 const Ctx = createContext<UnreadCtx>({ unread: {}, total: 0, markRead: async () => {} });
 
+// --- Notification sound using Web Audio API (no CDN, always works) ---
+function playNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const play = (freq: number, startTime: number, duration: number, vol: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, ctx.currentTime + startTime);
+      gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + startTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + duration);
+      osc.start(ctx.currentTime + startTime);
+      osc.stop(ctx.currentTime + startTime + duration);
+    };
+    // Two-tone ping like WhatsApp / chatib
+    play(880, 0, 0.12, 0.35);
+    play(1100, 0.13, 0.18, 0.25);
+  } catch (_) {}
+}
+
+// --- Browser push notification (shows when tab is minimised / in background) ---
+function showBrowserNotification(title: string, body: string, tag: string, onClick: () => void) {
+  if (typeof window === "undefined") return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  if (!document.hidden) return; // Only when tab is not focused
+  const n = new Notification(title, { body, tag, icon: "/favicon.ico", badge: "/favicon.ico", requireInteraction: false });
+  n.onclick = () => { window.focus(); onClick(); n.close(); };
+}
+
 export function UnreadProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [unread, setUnread] = useState<Record<string, number>>({});
-  // roomId -> otherId map, kept in a ref so the realtime listener stays cheap
   const roomMapRef = useRef<Map<string, string>>(new Map());
+  const nameCache = useRef<Map<string, string>>(new Map());
 
-  // Periodically run cleanup_old_messages (e.g. every 30s)
+  // Request browser notification permission once on login
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, [user]);
+
+  // Periodically run cleanup_old_messages (every 30s)
   useEffect(() => {
     if (!user) return;
     const runCleanup = async () => {
-      try {
-        await supabase.rpc("cleanup_old_messages");
-      } catch (e) {
-        console.error("Failed to run cleanup_old_messages rpc:", e);
-      }
+      try { await supabase.rpc("cleanup_old_messages"); } catch (_) {}
     };
-    
     runCleanup();
     const interval = setInterval(runCleanup, 30000);
     return () => clearInterval(interval);
@@ -74,7 +112,6 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       const readMap = new Map((reads ?? []).map((r) => [r.room_id, r.last_read_at as string]));
 
       const counts: Record<string, number> = {};
-      // Count unread messages per room (parallel small queries)
       await Promise.all(list.map(async (r) => {
         const since = readMap.get(r.roomId) ?? "1970-01-01";
         const { count } = await supabase
@@ -88,39 +125,47 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       if (active) setUnread(counts);
     })();
 
-    const triggerNotification = (otherId: string, m: any) => {
+    // Get sender name (cached to avoid repeated fetches)
+    const getSenderName = async (otherId: string): Promise<string> => {
+      if (nameCache.current.has(otherId)) return nameCache.current.get(otherId)!;
+      const { data } = await supabase.from("profiles").select("username").eq("id", otherId).single();
+      const name = data?.username || "Someone";
+      nameCache.current.set(otherId, name);
+      return name;
+    };
+
+    const triggerNotification = async (otherId: string, m: { content: string }) => {
       const isViewing = typeof window !== "undefined" && window.location.pathname === `/messages/${otherId}`;
-      
-      // Play audio notification sound
-      try {
-        const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-200.wav");
-        audio.play().catch((e) => console.log("Audio play error:", e));
-      } catch (e) {
-        console.error("Audio error:", e);
+
+      // Always play sound (even when in the chat, like WhatsApp)
+      playNotificationSound();
+
+      if (!isViewing) {
+        setUnread((u) => ({ ...u, [otherId]: (u[otherId] ?? 0) + 1 }));
       }
 
-      if (isViewing) return;
+      const name = await getSenderName(otherId);
+      const preview = m.content.length > 80 ? m.content.substring(0, 80) + "…" : m.content;
 
-      setUnread((u) => ({ ...u, [otherId]: (u[otherId] ?? 0) + 1 }));
+      // Browser push notification when tab is hidden/minimised
+      showBrowserNotification(
+        `💬 ${name}`,
+        preview,
+        `msg-${otherId}`,
+        () => { window.location.href = `/messages/${otherId}`; }
+      );
 
-      // Show Toast notification like Chatib
-      supabase
-        .from("profiles")
-        .select("username")
-        .eq("id", otherId)
-        .single()
-        .then(({ data }) => {
-          const name = data?.username || "Someone";
-          toast.info(`Message from ${name}`, {
-            description: m.content.length > 60 ? m.content.substring(0, 60) + "..." : m.content,
-            action: {
-              label: "Chat",
-              onClick: () => {
-                window.location.href = `/messages/${otherId}`;
-              },
-            },
-          });
+      if (!isViewing) {
+        // Sonner toast with sender + preview + Reply button
+        toast(`💬 ${name}`, {
+          description: preview,
+          duration: 5000,
+          action: {
+            label: "Reply",
+            onClick: () => { window.location.href = `/messages/${otherId}`; },
+          },
         });
+      }
     };
 
     const ch = supabase
@@ -128,10 +173,8 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         const m = payload.new as { room_id: string; sender_id: string; content: string };
         if (m.sender_id === me) return;
-        
         const otherId = roomMapRef.current.get(m.room_id);
         if (!otherId) {
-          // Fetch room mapping dynamically
           supabase
             .from("chat_rooms")
             .select("id,user_a,user_b")
