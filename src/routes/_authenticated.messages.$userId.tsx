@@ -31,7 +31,7 @@ type Msg = {
   _local?: boolean;
   _deleting?: boolean;
 };
-type Other = { id: string; username: string; avatar_url: string | null; is_online: boolean };
+type Other = { id: string; username: string; avatar_url: string | null; is_online: boolean; last_seen_at?: string | null };
 
 const CRISIS_RE = /\b(suicide|kill myself|end it|hurt myself|want to die)\b/i;
 
@@ -80,7 +80,7 @@ function DMChat() {
     let active = true;
     (async () => {
       const [{ data: prof }, { data: rid, error }] = await Promise.all([
-        supabase.from("profiles").select("id,username,avatar_url,is_online").eq("id", userId).single(),
+        supabase.from("profiles").select("id,username,avatar_url,is_online,last_seen_at").eq("id", userId).single(),
         supabase.rpc("get_or_create_dm", { target: userId }),
       ]);
       if (!active) return;
