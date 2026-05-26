@@ -59,7 +59,11 @@ function DMChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // Separate refs: one for the typing broadcast channel, one for the msgs channel
   const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const msgsChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Track last polled timestamp for fallback polling
+  const lastPollTsRef = useRef<string>(new Date(0).toISOString());
   
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef<number | null>(null);
@@ -96,7 +100,12 @@ function DMChat() {
         .limit(50);
       if (!active) return;
       if (msgs) {
-        setMessages([...msgs].reverse() as Msg[]);
+        const sorted = [...msgs].reverse() as Msg[];
+        setMessages(sorted);
+        // Seed the poll cursor so we only fetch messages newer than what we already have
+        if (sorted.length > 0) {
+          lastPollTsRef.current = sorted[sorted.length - 1].created_at;
+        }
       }
       markRead(userId);
 
@@ -146,15 +155,18 @@ function DMChat() {
     }, 400);
   }, []);
 
-  // Realtime: INSERT + UPDATE + DELETE + typing
+  // Channel 1: postgres_changes for messages (INSERT / UPDATE / DELETE)
+  // Kept separate from broadcast so both can work independently
   useEffect(() => {
     if (!roomId || !user) return;
     const ch = supabase
-      .channel(`room:${roomId}`, { config: { broadcast: { self: false } } })
+      .channel(`msgs:${roomId}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
         (payload) => {
           const m = payload.new as Msg;
+          // Update lastPollTs so polling doesn't duplicate
+          if (m.created_at > lastPollTsRef.current) lastPollTsRef.current = m.created_at;
           setMessages((prev) => {
             const idx = prev.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
             if (idx >= 0) {
@@ -167,7 +179,6 @@ function DMChat() {
           });
           if (m.sender_id !== user.id) {
             markRead(userId);
-            // Auto-mark as read since chat is open
             supabase.from("messages").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
           }
         })
@@ -183,6 +194,17 @@ function DMChat() {
           const oldId = (payload.old as { id: string }).id;
           handleDeleteMessage(oldId);
         })
+      .subscribe();
+    msgsChRef.current = ch;
+    return () => { ch.unsubscribe(); msgsChRef.current = null; };
+  }, [roomId, user, userId, markRead, handleDeleteMessage]);
+
+  // Channel 2: broadcast-only channel for typing indicator
+  // Separate channel prevents broadcast config from blocking postgres_changes
+  useEffect(() => {
+    if (!roomId || !user) return;
+    const ch = supabase
+      .channel(`typing:${roomId}`, { config: { broadcast: { self: false } } })
       .on("broadcast", { event: "typing" }, (payload) => {
         const p = payload.payload as { from: string; typing: boolean };
         if (p.from === userId) {
@@ -202,7 +224,42 @@ function DMChat() {
       .subscribe();
     typingChRef.current = ch;
     return () => { ch.unsubscribe(); typingChRef.current = null; };
-  }, [roomId, user, userId, markRead, handleDeleteMessage]);
+  }, [roomId, user, userId]);
+
+  // Polling fallback: fetch new messages every 3s in case WebSocket drops
+  useEffect(() => {
+    if (!roomId || !user) return;
+    const poll = async () => {
+      const since = lastPollTsRef.current;
+      const { data } = await supabase
+        .from("messages")
+        .select("id,sender_id,content,created_at,read_at,delivered_at,status")
+        .eq("room_id", roomId)
+        .gt("created_at", since)
+        .order("created_at", { ascending: true });
+      if (!data || data.length === 0) return;
+      // Update lastPollTs to the newest message
+      lastPollTsRef.current = data[data.length - 1].created_at;
+      setMessages((prev) => {
+        let next = [...prev];
+        for (const m of data as Msg[]) {
+          // Replace optimistic local message if exists
+          const idx = next.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
+          if (idx >= 0) { next[idx] = m; continue; }
+          // Skip if already in list
+          if (next.some((x) => x.id === m.id)) continue;
+          next = [...next, m];
+          // Auto-mark incoming messages as read
+          if (m.sender_id !== user.id) {
+            supabase.from("messages").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
+          }
+        }
+        return next;
+      });
+    };
+    const interval = window.setInterval(poll, 3000);
+    return () => window.clearInterval(interval);
+  }, [roomId, user]);
 
   // Auto-scroll
   useEffect(() => {
