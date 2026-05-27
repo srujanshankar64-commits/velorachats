@@ -120,7 +120,6 @@ function Room() {
       </div>
       <div className="text-center py-1">
           <a
-            href="https://omg10.com/4/11052130"
             target="_blank"
             rel="noopener noreferrer"
             className="text-[11px] text-[#444] hover:text-[#666] transition-colors"
