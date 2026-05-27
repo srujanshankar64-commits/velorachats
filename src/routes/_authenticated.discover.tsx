@@ -206,6 +206,10 @@ setProfiles(realProfiles);
   }, [profiles, filter, tick]);
 
   async function openDM(targetId: string) {
+    if (targetId.startsWith("ghost-")) {
+      nav({ to: "/messages/$userId", params: { userId: targetId } });
+      return;
+    }
     const { error } = await supabase.rpc("get_or_create_dm", { target: targetId });
     if (error) return toast.error(error.message);
     nav({ to: "/messages/$userId", params: { userId: targetId } });
