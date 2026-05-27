@@ -205,15 +205,9 @@ setProfiles(realProfiles);
     return result;
   }, [profiles, filter, tick]);
 
-  async function openDM(targetId: string) {
-    if (targetId.startsWith("ghost-")) {
-      nav({ to: "/messages/$userId", params: { userId: targetId } });
-      return;
-    }
-    const { error } = await supabase.rpc("get_or_create_dm", { target: targetId });
-    if (error) return toast.error(error.message);
-    nav({ to: "/messages/$userId", params: { userId: targetId } });
-  }
+async function openDM(targetId: string) {
+  nav({ to: "/messages/$id", params: { id: targetId } });
+}
 
   return (
     <div className="min-h-[100dvh] bg-black text-white">
