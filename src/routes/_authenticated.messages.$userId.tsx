@@ -394,8 +394,6 @@ function DMChat() {
             </div>
           </div>
         )}
-        <button disabled className="p-2 text-[#5F6368]" aria-label="Voice (coming soon)" title="Coming soon"><Phone className="h-5 w-5" strokeWidth={1.5} /></button>
-        <button disabled className="p-2 text-[#5F6368]" aria-label="Video (coming soon)" title="Coming soon"><Video className="h-5 w-5" strokeWidth={1.5} /></button>
         <button onClick={() => setMenuOpen(true)} className="p-2 -mr-2" aria-label="More">
           <MoreHorizontal className="h-5 w-5" strokeWidth={1.5} />
         </button>
