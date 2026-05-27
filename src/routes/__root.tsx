@@ -58,11 +58,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Talk to a real person when your mind won't stop. Free and anonymous." },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:url", content: SITE + "/" },
-        { property: "og:image", content: SITE + "/logo.jpg" },
+        { property: "og:image", content: SITE + "/og-image.jpg" },
         { property: "og:image:width", content: "1200" },
         { property: "og:image:height", content: "630" },
         { property: "og:image:type", content: "image/jpeg" },
-        { name: "twitter:image", content: SITE + "/logo.jpg" },
+        { name: "twitter:image", content: SITE + "/og-image.jpg" },
         { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
