@@ -95,7 +95,14 @@ function Discover() {
     ]).then(([profileRes]) => {
       if (!active) return;
       if (profileRes.error) toast.error(profileRes.error.message);
-      setProfiles((profileRes.data ?? []) as Profile[]);
+      const GHOST_USERS: Profile[] = [
+  { id: "ghost-1", username: "nightowl_anon", avatar_url: null, bio: "here for late night convos", is_online: true, last_seen_at: new Date().toISOString(), age: 22, name: "Night Owl", state: "India" },
+  { id: "ghost-2", username: "insomniac_", avatar_url: null, bio: "cant sleep, lets talk", is_online: true, last_seen_at: new Date().toISOString(), age: 19, name: "Insomniac", state: "India" },
+  { id: "ghost-3", username: "anon_vibes", avatar_url: null, bio: "just vibing anonymously", is_online: true, last_seen_at: new Date().toISOString(), age: $null, name: $null, state: $null },
+];
+const realProfiles = (profileRes.data ?? []) as Profile[];
+const ghostsToShow = realProfiles.length === 0 ? GHOST_USERS : [];
+setProfiles([...ghostsToShow, ...realProfiles]);
       setLoading(false);
     });
 
@@ -203,7 +210,7 @@ function Discover() {
         {loading ? (
           <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-[72px] rounded-2xl bg-[#0d0d0e]" />)}</div>
         ) : list.length === 0 ? (
-          <p className="text-center text-sm text-[#888] py-12">No people found</p>
+          <div className="text-center py-12"><p className="text-2xl mb-2">🌙</p><p className="text-sm text-[#888]">No one online right now</p><p className="text-xs text-[#555] mt-1">Most people show up late at night · Check back after 10 PM</p></div>
         ) : (
           <div className="flex flex-col gap-0.5">
             {list.map((p) => (
