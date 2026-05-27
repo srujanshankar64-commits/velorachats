@@ -106,7 +106,7 @@ function Discover() {
     ]).then(([profileRes]) => {
       if (!active) return;
       if (profileRes.error) toast.error(profileRes.error.message);
-      const GHOST_USERS: Profile[] = [
+      const _unused = [
   { id: 'ghost-1', username: 'arjun', avatar_url: null, bio: 'late night thoughts', is_online: true, last_seen_at: new Date().toISOString(), age: 21, name: 'Arjun', state: 'Maharashtra' },
   { id: 'ghost-2', username: 'priya', avatar_url: null, bio: 'cant sleep again', is_online: true, last_seen_at: new Date().toISOString(), age: 20, name: 'Priya', state: 'Karnataka' },
   { id: 'ghost-3', username: 'rohan', avatar_url: null, bio: 'just vibing', is_online: true, last_seen_at: new Date().toISOString(), age: 22, name: 'Rohan', state: 'Delhi' },
