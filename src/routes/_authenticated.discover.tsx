@@ -96,13 +96,19 @@ function Discover() {
       if (!active) return;
       if (profileRes.error) toast.error(profileRes.error.message);
       const GHOST_USERS: Profile[] = [
-  { id: "ghost-1", username: "nightowl_anon", avatar_url: null, bio: "here for late night convos", is_online: true, last_seen_at: new Date().toISOString(), age: 22, name: "Night Owl", state: "India" },
-  { id: "ghost-2", username: "insomniac_", avatar_url: null, bio: "cant sleep, lets talk", is_online: true, last_seen_at: new Date().toISOString(), age: 19, name: "Insomniac", state: "India" },
-  { id: "ghost-3", username: "anon_vibes", avatar_url: null, bio: "just vibing anonymously", is_online: true, last_seen_at: new Date().toISOString(), age: $null, name: $null, state: $null },
+  { id: 'ghost-1', username: 'arjun', avatar_url: null, bio: 'late night thoughts', is_online: true, last_seen_at: new Date().toISOString(), age: 21, name: 'Arjun', state: 'Maharashtra' },
+  { id: 'ghost-2', username: 'priya', avatar_url: null, bio: 'cant sleep again', is_online: true, last_seen_at: new Date().toISOString(), age: 20, name: 'Priya', state: 'Karnataka' },
+  { id: 'ghost-3', username: 'rohan', avatar_url: null, bio: 'just vibing', is_online: true, last_seen_at: new Date().toISOString(), age: 22, name: 'Rohan', state: 'Delhi' },
+  { id: 'ghost-4', username: 'sneha', avatar_url: null, bio: 'insomniac here', is_online: true, last_seen_at: new Date().toISOString(), age: 19, name: 'Sneha', state: 'Tamil Nadu' },
+  { id: 'ghost-5', username: 'karan', avatar_url: null, bio: 'bored at midnight', is_online: true, last_seen_at: new Date().toISOString(), age: 23, name: 'Karan', state: 'Gujarat' },
+  { id: 'ghost-6', username: 'ananya', avatar_url: null, bio: 'here to talk', is_online: true, last_seen_at: new Date().toISOString(), age: 20, name: 'Ananya', state: 'West Bengal' },
+  { id: 'ghost-7', username: 'dev', avatar_url: null, bio: 'night owl forever', is_online: true, last_seen_at: new Date().toISOString(), age: 24, name: 'Dev', state: 'Rajasthan' },
+  { id: 'ghost-8', username: 'meera', avatar_url: null, bio: 'anonymous and free', is_online: true, last_seen_at: new Date().toISOString(), age: 21, name: 'Meera', state: 'Kerala' },
 ];
 const realProfiles = (profileRes.data ?? []) as Profile[];
-const ghostsToShow = realProfiles.length === 0 ? GHOST_USERS : [];
-setProfiles([...ghostsToShow, ...realProfiles]);
+const onlineReal = realProfiles.filter(p => { const diff = Date.now() - new Date(p.last_seen_at || 0).getTime(); return diff < 60000; });
+const showGhosts = onlineReal.length < 3;
+setProfiles(realProfiles);
       setLoading(false);
     });
 
@@ -173,6 +179,9 @@ setProfiles([...ghostsToShow, ...realProfiles]);
 
     if (filter === "online") {
       result = result.filter((p) => p._liveOnline);
+      if (result.length < 3) {
+        result = [...GHOST_USERS.map(g => ({...g, _liveOnline: true})), ...result];
+      }
     }
 
     // Sort: Online first, then by username
@@ -210,7 +219,7 @@ setProfiles([...ghostsToShow, ...realProfiles]);
         {loading ? (
           <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-[72px] rounded-2xl bg-[#0d0d0e]" />)}</div>
         ) : list.length === 0 ? (
-          <div className="text-center py-12"><p className="text-2xl mb-2">🌙</p><p className="text-sm text-[#888]">No one online right now</p><p className="text-xs text-[#555] mt-1">Most people show up late at night · Check back after 10 PM</p></div>
+          <p className="text-center text-sm text-[#888] py-12">No one online right now. Most people show up after 10 PM</p>
         ) : (
           <div className="flex flex-col gap-0.5">
             {list.map((p) => (
