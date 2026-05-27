@@ -62,6 +62,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "canonical", href: SITE + "/" },
+        { property: "og:image", content: SITE + "/og-image.svg" },
+        { name: "twitter:image", content: SITE + "/og-image.svg" },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "apple-touch-icon", href: "/favicon.svg" },
       { rel: "preconnect", href: SUPABASE_URL, crossOrigin: "anonymous" },
