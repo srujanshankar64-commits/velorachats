@@ -1,0 +1,65 @@
+[33ma71f7ee[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Design: Restore gorgeous high-fidelity premium layout UI for chat
+[33mb2fe8c9[m Feature: Restore real DM chat rendering functionality
+[33m10ac141[m Fix: Bypassed useAuth hook file import entirely using native supabase auth listener
+[33mbb55133[m Fix: Add explicit .tsx extension to useAuth import
+[33m394d2d5[m Fix: use absolute alias mapping for useAuth component component
+[33mcfaeaab[m Fix: Clear route tree cache and fix useAuth import
+[33m3c6f5ca[m Fix case-sensitivity build error for useAuth
+[33ma79eb9a[m Fix: correct useAuth import path casing
+[33m9b0c086[m Force deploy: Thu May 28 00:21:29 IST 2026
+[33m0710e9f[m Fix infinite redirect loop in authenticated layout
+[33md218b85[m Emergency: Force render test
+[33m111a8a8[m Emergency fix: Use safe-load diagnostic
+[33m5851776[m Add stable real-time listener and notification gatekeeper
+[33mc1961cc[m Restore data fetching
+[33mf1dd91b[m Trigger clean redeployment
+[33mba6fc62[m Emergency: Reset to minimal working page
+[33m3ebdf2f[m Debug database connection
+[33mad4d92b[m Force clean build and environment sync
+[33m3d07950[m Trigger redeploy to update env vars
+[33mfab4293[m Trigger redeploy to update env vars
+[33m8527f72[m Surgical fix: Add tab-visibility gatekeeper to messages
+[33m2026351[m Trigger clean rebuild to resolve rendering crash
+[33me4005d4[m Full clean implementation of tab-hidden notification logic
+[33me40b3a3[m Merged reliable tab-aware system push banners and audio
+[33mf13f59c[m Completely removed duplicate sound handlers from chat view
+[33m8d2ada2[m Added document visibility check for incoming audio notifications
+[33mfaeb560[m Injected real-time notification sound trigger
+[33m1098f9a[m Added notification sound coding
+[33m62a6002[m fix: manual patch for notification hook
+[33mbebb29b[m Add files via upload
+[33m008296c[m chore: create clean fresh notification utility
+[33mc0ec018[m feat: add notification script via terminal
+[33m1ae452c[m[33m ([m[1;31morigin/feature/audio-notifications[m[33m)[m feat: added notification permissions and sound trigger file
+[33md071d6f[m fix: ghost users open DM directly, skip Supabase
+[33m5ce0706[m fix: remove duplicate GHOST_USERS definition
+[33m08511e8[m fix: move GHOST_USERS to module scope
+[33m72f9222[m fix: ghost users only shown in online filter tab
+[33m3502ffb[m Merge branch 'main' of https://github.com/srujanshankar64-commits/velorachats :wq#
+[33mbca3bf5[m fix: ghost users and better empty state
+[33mb0026af[m Update index.html
+[33m710936f[m Update index.html
+[33m108d5b4[m Add files via upload
+[33m15eb64e[m Create index.html
+[33m2fc63ee[m feat: add ShhChats OG image
+[33m2e0dd09[m feat: add proper ShhChats OG image
+[33macdbd1a[m fix: move og:image to meta array with correct dimensions for all platforms
+[33m8a81612[m fix: correct og:image and twitter:image to use meta tags
+[33me3babea[m fix: use logo.jpg as OG image
+[33mae34650[m feat: add OG image meta tags
+[33mca40b7e[m chore: force redeploy
+[33mbea2e14[m fix: update privacy policy ads text, fix email and safety canonical
+[33m6b1a31b[m chore: force redeploy after cache clear
+[33m834bbae[m fix: remove fake testimonials and advertise link
+[33m3b501da[m fix: replace old workers.dev URLs with shhchats.in
+[33m1013703[m fix: resolve TypeScript compiler warnings and update Supabase type definitions
+[33m9c2f0bb[m fix: resolve sound and browser push notification autoplay blocking
+[33maf84d27[m fix: typing indicator race condition, 1s polling, Web Audio sound, browser push notifications
+[33m387a684[m fix: split realtime and typing channels, add polling fallback for messages
+[33mf1e1a22[m fix: online status in DM, friend requests on Discover, sound notifications
+[33m55cfa60[m fix: add deploy command
+[33m62c3cd2[m fix: trigger redeploy
+[33m320686e[m fix: trigger redeploy with friend requests and sound notifications
+[33m7683d68[m chore: regenerate bun lockfile
+[33ma02a0dc[m Delete bun.lock
+[33m3406f94[m feat: friend requests and sound notifications
