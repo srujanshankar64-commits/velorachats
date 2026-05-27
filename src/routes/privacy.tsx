@@ -42,7 +42,7 @@ function Privacy() {
           <p>To match you with people, deliver messages in real time, and review reports of abuse. Nothing else.</p>
         </Card>
         <Card title="What we don't do">
-          <p>No ads. No selling your data. No tracking you across other sites.</p>
+          <p>We use privacy-friendly display ads (Monetag). No selling your data. No tracking you across other sites.</p>
         </Card>
         <Card title="Data retention">
           <p>Messages are retained while your account is active. Delete your profile from Profile → Danger zone and your data is removed.</p>
@@ -54,7 +54,7 @@ function Privacy() {
           <p>We only use localStorage on your device to keep you signed in. No third-party tracking cookies.</p>
         </Card>
         <Card title="Contact">
-          <p>privacy@shhchats.com</p>
+          <p>privacy@shhchats.in</p>
         </Card>
       </main>
     </div>

@@ -8,9 +8,9 @@ export const Route = createFileRoute("/safety")({
       { name: "description", content: "Community guidelines, reporting, and privacy at ShhChats." },
       { property: "og:title", content: "Safety at ShhChats" },
       { property: "og:description", content: "How we keep ShhChats safe and private." },
-      { property: "og:url", content: "https://velorachats.lovable.app/safety" },
+      { property: "og:url", content: "https://shhchats.in/safety" },
     ],
-    links: [{ rel: "canonical", href: "https://velorachats.lovable.app/safety" }],
+    links: [{ rel: "canonical", href: "https://shhchats.in/safety" }],
   }),
   component: SafetyPage,
 });
