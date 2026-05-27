@@ -108,6 +108,11 @@ function DMChat() {
         }
       }
       markRead(userId);
+        // Only play sound if the user is currently looking at another tab
+        if (document.hidden) {
+          const audio = new Audio("/notification.mp3");
+          audio.play().catch(e => console.log("Blocked:", e));
+        }
         new Audio("/notification.mp3").play().catch(e => console.log("Audio playback blocked:", e));
 
       // Mark their messages as read now
@@ -180,6 +185,11 @@ function DMChat() {
           });
           if (m.sender_id !== user.id) {
             markRead(userId);
+        // Only play sound if the user is currently looking at another tab
+        if (document.hidden) {
+          const audio = new Audio("/notification.mp3");
+          audio.play().catch(e => console.log("Blocked:", e));
+        }
         new Audio("/notification.mp3").play().catch(e => console.log("Audio playback blocked:", e));
             supabase.from("messages").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
           }
