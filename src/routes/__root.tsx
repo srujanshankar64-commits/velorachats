@@ -14,7 +14,7 @@ import { UnreadProvider } from "@/lib/unread";
 import appCss from "../styles.css?url";
 
 const SUPABASE_URL = "https://uavwrahakmzmfdwqwnek.supabase.co";
-const SITE = "https://velorachats.velorachats.workers.dev";
+const SITE = "https://shhchats.in";
 
 function NotFoundComponent() {
   return (

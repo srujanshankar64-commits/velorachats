@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
-const SITE = "https://velorachats.velorachats.workers.dev";
+const SITE = "https://shhchats.in";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({

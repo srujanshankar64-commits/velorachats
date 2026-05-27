@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-const SITE = "https://velorachats.velorachats.workers.dev";
+const SITE = "https://shhchats.in";
 
 export const Route = createFileRoute("/")({
   head: () => ({
