@@ -29,6 +29,17 @@ type Friendship = {
   status: string;
 };
 
+const GHOST_USERS: Profile[] = [
+  { id: 'ghost-1', username: 'arjun', avatar_url: null, bio: 'late night thoughts', is_online: true, last_seen_at: new Date().toISOString(), age: 21, name: 'Arjun', state: 'Maharashtra' },
+  { id: 'ghost-2', username: 'priya', avatar_url: null, bio: 'cant sleep again', is_online: true, last_seen_at: new Date().toISOString(), age: 20, name: 'Priya', state: 'Karnataka' },
+  { id: 'ghost-3', username: 'rohan', avatar_url: null, bio: 'just vibing', is_online: true, last_seen_at: new Date().toISOString(), age: 22, name: 'Rohan', state: 'Delhi' },
+  { id: 'ghost-4', username: 'sneha', avatar_url: null, bio: 'insomniac here', is_online: true, last_seen_at: new Date().toISOString(), age: 19, name: 'Sneha', state: 'Tamil Nadu' },
+  { id: 'ghost-5', username: 'karan', avatar_url: null, bio: 'bored at midnight', is_online: true, last_seen_at: new Date().toISOString(), age: 23, name: 'Karan', state: 'Gujarat' },
+  { id: 'ghost-6', username: 'ananya', avatar_url: null, bio: 'here to talk', is_online: true, last_seen_at: new Date().toISOString(), age: 20, name: 'Ananya', state: 'West Bengal' },
+  { id: 'ghost-7', username: 'dev', avatar_url: null, bio: 'night owl forever', is_online: true, last_seen_at: new Date().toISOString(), age: 24, name: 'Dev', state: 'Rajasthan' },
+  { id: 'ghost-8', username: 'meera', avatar_url: null, bio: 'anonymous and free', is_online: true, last_seen_at: new Date().toISOString(), age: 21, name: 'Meera', state: 'Kerala' },
+];
+
 function Discover() {
   const { user } = useAuth();
   const nav = useNavigate();
