@@ -1,50 +1,54 @@
-// Request browser permission for notifications safely
+// Auto-request notification permission when user lands
 function initChatNotifications() {
-  if (!("Notification" in window)) {
-    console.log("This browser does not support desktop notifications.");
-    return;
-  }
-  
+  if (!("Notification" in window)) return;
   if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-    Notification.requestPermission().then(permission => {
-      console.log("Notification permission status:", permission);
-    });
+    Notification.requestPermission();
   }
 }
 
-// Global function to trigger the sound and the banner alert
-function playChatAlert(senderName, messageText) {
-  // 1. Play the notification sound from the public folder
-  const audio = new Audio('/notification.mp3');
-  
-  audio.play().catch(error => {
-    // Chrome blocks audio if the user hasn't clicked on the page yet
-    console.log("Audio playback deferred until user interacts with the app:", error);
-  });
+// Unlock audio on first user interaction (Chrome requirement)
+function unlockAudio() {
+  const silent = new Audio('/notification.mp3');
+  silent.volume = 0;
+  silent.play().then(() => {
+    silent.pause();
+    silent.currentTime = 0;
+  }).catch(() => {});
+  document.removeEventListener('click', unlockAudio);
+  document.removeEventListener('touchstart', unlockAudio);
+}
 
-  // 2. Display the Chrome system notification banner
+// Trigger sound + system notification on new DM
+function playChatAlert(senderName, messageText) {
+  // Play sound
+  const audio = new Audio('/notification.mp3');
+  audio.volume = 1.0;
+  audio.play().catch(() => {});
+
+  // Show system notification
   if (window.Notification && Notification.permission === "granted") {
     const options = {
       body: messageText || "Sent a message",
-      icon: '/favicon.ico', 
-      tag: 'shhchats-message', // Groups notifications so your desktop doesn't flood
-      renotify: true           // Forces phone/computer to vibrate or alert for new messages
+      icon: '/favicon.svg',
+      tag: 'shhchats-message',
+      renotify: true
     };
-
     try {
       new Notification(`New message from ${senderName || 'Someone'}`, options);
-    } catch (e) {
-      console.error("Failed to create desktop notification:", e);
-    }
+    } catch (e) {}
   }
 }
 
-// Auto-run permission request when the script loads in the browser
+// Run on page load
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", initChatNotifications);
 } else {
   initChatNotifications();
 }
 
-// Attach functions to window so Lovable's React components can easily see it
+// Unlock audio on first tap/click
+document.addEventListener('click', unlockAudio);
+document.addEventListener('touchstart', unlockAudio);
+
+// Expose to React components
 window.playChatAlert = playChatAlert;
