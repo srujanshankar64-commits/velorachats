@@ -117,7 +117,6 @@ function DMChat() {
       // Mark their messages as read now
       await supabase
         .from("messages")
-        .update({ is_read: true, read_at: new Date().toISOString() })
         .eq("room_id", rid as string)
         .neq("sender_id", user.id)
         .eq("is_read", false);
@@ -189,7 +188,6 @@ function DMChat() {
           if (typeof window.playChatAlert === "function") window.playChatAlert(m.sender_id, m.content);
           audio.play().catch(e => console.log("Blocked:", e));
         }
-            supabase.from("messages").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
           }
         })
       .on("postgres_changes",
@@ -262,7 +260,6 @@ function DMChat() {
           next = [...next, m];
           // Auto-mark incoming messages as read
           if (m.sender_id !== user.id) {
-            supabase.from("messages").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
           }
         }
         return next;
