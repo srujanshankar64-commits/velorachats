@@ -110,6 +110,7 @@ function DMChat() {
       markRead(userId);
         // Only play sound if the user is currently looking at another tab
         if (document.hidden) {
+          if (typeof window.playChatAlert === "function") window.playChatAlert(m.sender_id, m.content);
           audio.play().catch(e => console.log("Blocked:", e));
         }
 
@@ -185,6 +186,7 @@ function DMChat() {
             markRead(userId);
         // Only play sound if the user is currently looking at another tab
         if (document.hidden) {
+          if (typeof window.playChatAlert === "function") window.playChatAlert(m.sender_id, m.content);
           audio.play().catch(e => console.log("Blocked:", e));
         }
             supabase.from("messages").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
