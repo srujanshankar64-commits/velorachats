@@ -107,7 +107,7 @@ function DMChat() {
           lastPollTsRef.current = sorted[sorted.length - 1].created_at;
         }
       }
-      markRead(userId);
+      if (!document.hidden) { markRead(userId); }
         // Only play sound if the user is currently looking at another tab
         if (document.hidden) {
           if (typeof window.playChatAlert === "function") window.playChatAlert(m.sender_id, m.content);
@@ -182,7 +182,7 @@ function DMChat() {
             return [...prev, m];
           });
           if (m.sender_id !== user.id) {
-            markRead(userId);
+            if (!document.hidden) { markRead(userId); }
         // Only play sound if the user is currently looking at another tab
         if (document.hidden) {
           if (typeof window.playChatAlert === "function") window.playChatAlert(m.sender_id, m.content);
