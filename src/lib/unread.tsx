@@ -206,7 +206,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
               if (data) {
                 const oid = data.user_a === me ? data.user_b : data.user_a;
                 roomMapRef.current.set(data.id, oid);
-                triggerNotification(oid, m);
+                triggerNotification(oid, m); if (typeof (window as any).playChatAlert === 'function') { (window as any).playChatAlert(m.sender_id, m.content); }
               }
             });
         } else {
