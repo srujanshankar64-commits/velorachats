@@ -13,50 +13,53 @@ interface UnreadCtx {
 
 const Ctx = createContext<UnreadCtx>({ unread: {}, total: 0, markRead: async () => {} });
 
-// ─── Audio: singleton AudioContext, unlocked on first user gesture ───────────
-let _audioCtx: AudioContext | null = null;
+// ─── Audio: play notification.mp3 (Facebook-style sound in /public) ──────────
+// Keep a single reusable Audio element to avoid creating new ones repeatedly
+let _audio: HTMLAudioElement | null = null;
 
-function getAudioCtx(): AudioContext | null {
+function getAudio(): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
-  const Cls = (window as any).AudioContext || (window as any).webkitAudioContext;
-  if (!Cls) return null;
-  if (!_audioCtx) _audioCtx = new Cls();
-  return _audioCtx;
+  if (!_audio) {
+    _audio = new Audio("/notification.mp3");
+    _audio.volume = 0.7;
+    _audio.preload = "auto";
+  }
+  return _audio;
 }
 
-/** Must be called from a user-gesture handler (click / keydown / touchstart) */
+/** Called on first user gesture to pre-load and unlock audio playback */
 function unlockAudio() {
-  const ctx = getAudioCtx();
-  if (ctx && ctx.state === "suspended") ctx.resume();
-}
-
-function playTones(ctx: AudioContext) {
-  const tone = (freq: number, t0: number, dur: number, vol: number) => {
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0,   ctx.currentTime + t0);
-    gain.gain.linearRampToValueAtTime(vol,   ctx.currentTime + t0 + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t0 + dur);
-    osc.start(ctx.currentTime + t0);
-    osc.stop (ctx.currentTime + t0 + dur);
-  };
-  tone(880,  0,    0.14, 0.4);   // first ping
-  tone(1100, 0.15, 0.20, 0.28);  // second ping
+  const a = getAudio();
+  if (!a) return;
+  // A silent play+pause pre-loads the file and satisfies browser autoplay policy
+  a.play().then(() => a.pause()).catch(() => {});
+  a.currentTime = 0;
 }
 
 function playNotificationSound() {
   try {
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    if (ctx.state === "suspended") {
-      ctx.resume().then(() => playTones(ctx)).catch(() => {});
-    } else {
-      playTones(ctx);
-    }
+    const a = getAudio();
+    if (!a) return;
+    a.currentTime = 0;
+    a.play().catch(() => {
+      // Fallback: Web Audio API two-tone ping if mp3 fails
+      const Cls = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!Cls) return;
+      const ctx = new Cls();
+      const tone = (freq: number, t0: number, dur: number, vol: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = "sine"; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, ctx.currentTime + t0);
+        gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + t0 + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t0 + dur);
+        osc.start(ctx.currentTime + t0);
+        osc.stop(ctx.currentTime + t0 + dur);
+      };
+      tone(880, 0, 0.14, 0.4);
+      tone(1100, 0.15, 0.20, 0.28);
+    });
   } catch (_) {}
 }
 
