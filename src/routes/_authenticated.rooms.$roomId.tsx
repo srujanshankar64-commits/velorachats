@@ -1,9 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { ArrowLeft, ArrowUp, Heart, Users, Globe } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
 
 export const Route = createFileRoute("/_authenticated/rooms/$roomId")({
   head: () => ({ meta: [{ title: "Room - Velora" }] }),
@@ -24,37 +26,117 @@ const TITLES: Record<string, string> = {
   open: "Open Chat",
 };
 
+const ICONS: Record<string, any> = {
+  dating: Heart,
+  friendship: Users,
+  open: Globe,
+};
+
+const COLORS: Record<string, string> = {
+  dating: "#ec4899",
+  friendship: "#7C3AED",
+  open: "#22C55E",
+};
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 function Room() {
   const { roomId } = Route.useParams();
   const { user } = useAuth();
   const nav = useNavigate();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [profilesCache, setProfilesCache] = useState<Record<string, string>>({});
+  const profilesCacheRef = useRef<Record<string, string>>({});
   const [input, setInput] = useState("");
+  const [onlineCount, setOnlineCount] = useState(1);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  };
+  // Sync ref with state cache
+  useEffect(() => {
+    profilesCacheRef.current = profilesCache;
+  }, [profilesCache]);
 
+  // Close emoji picker on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(e.target as Node)
+      ) {
+        setEmojiPickerOpen(false);
+      }
+    };
+    if (emojiPickerOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [emojiPickerOpen]);
+
+  // Auto-scroll
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs]);
+
+  // Supabase Presence for live user count
+  useEffect(() => {
+    if (!user) return;
+
+    const presenceChannel = supabase.channel(`room_presence:${roomId}`, {
+      config: {
+        presence: {
+          key: user.id,
+        },
+      },
+    });
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = presenceChannel.presenceState();
+        const count = Object.keys(state).length;
+        setOnlineCount(count);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await presenceChannel.track({
+            user_id: user.id,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+    };
+  }, [roomId, user]);
+
+  // Fetch messages and subscribe to inserts
   useEffect(() => {
     let active = true;
 
     const fetchMessages = async () => {
-      const { data, error } = await supabase
+      const { data: dbData, error } = await supabase
         .from("room_messages")
         .select("id, user_id, content, created_at, profiles:user_id(username)")
         .eq("room_id", roomId)
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (error || !active || !data) return;
+      if (error || !active || !dbData) return;
 
-      const ordered = [...data].reverse();
+      const ordered = [...dbData].reverse();
       const cache: Record<string, string> = {};
-      
+
       const mapped = ordered.map((m: any) => {
         const uname = m.profiles?.username || "unknown";
         cache[m.user_id] = uname;
@@ -69,7 +151,6 @@ function Room() {
 
       setProfilesCache((prev) => ({ ...prev, ...cache }));
       setMsgs(mapped);
-      scrollToBottom();
     };
 
     fetchMessages();
@@ -84,8 +165,8 @@ function Room() {
           if (!newMsg) return;
 
           const msgUserId = String(newMsg.user_id || "");
-          let username = profilesCache[msgUserId];
-          
+          let username = profilesCacheRef.current[msgUserId];
+
           if (!username && msgUserId) {
             const { data: pData } = await supabase.from("profiles").select("username").eq("id", msgUserId).single();
             username = pData?.username || "unknown";
@@ -101,7 +182,6 @@ function Room() {
           };
 
           setMsgs((prev) => prev.some((m) => m.id === completeMsg.id) ? prev : [...prev, completeMsg]);
-          scrollToBottom();
         }
       )
       .subscribe();
@@ -110,7 +190,7 @@ function Room() {
       active = false;
       supabase.removeChannel(channel);
     };
-  }, [roomId, profilesCache]);
+  }, [roomId]);
 
   const send = async () => {
     if (!input.trim() || !user?.id) return;
@@ -126,36 +206,135 @@ function Room() {
     if (error) toast.error("Failed to deliver message");
   };
 
+  const handleSelectEmoji = (emoji: { native: string }) => {
+    setInput((prev) => prev + emoji.native);
+    inputRef.current?.focus();
+  };
+
+  const Icon = ICONS[roomId] || Globe;
+  const iconColor = COLORS[roomId] || "#22C55E";
+
   return (
-    <div className="flex flex-col h-[100dvh] bg-black text-white">
-      <header className="h-14 px-3 flex items-center gap-3 bg-black border-b border-[#1C1C1E]">
-        <button onClick={() => nav({ to: "/rooms" })} className="p-2 -ml-2">
+    <div className="flex flex-col h-[100dvh] bg-[#0D0D0F] text-[#E8EAED]">
+      {/* Top bar */}
+      <header className="h-[60px] shrink-0 px-3 flex items-center gap-3 bg-[#1A1A1F] border-b border-[rgba(255,255,255,0.06)]">
+        <button onClick={() => nav({ to: "/rooms" })} className="p-2 -ml-2" aria-label="Back">
           <ArrowLeft className="h-6 w-6" strokeWidth={1.5} />
         </button>
-        <p className="text-sm font-semibold">{TITLES[roomId] || "Room"}</p>
+        <div className="flex-1 min-w-0 flex items-center gap-2.5">
+          <div className="relative">
+            <div className="h-9 w-9 rounded-full flex items-center justify-center" style={{ background: iconColor + "22" }}>
+              <Icon className="h-5 w-5" style={{ color: iconColor }} strokeWidth={1.5} />
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#1A1A1F] bg-[#4ADE80]" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm text-[#E8EAED] truncate leading-tight font-medium">
+              {TITLES[roomId] || "Room"}
+            </p>
+            <p className="text-[11px] text-[#9AA0A6] leading-tight">
+              <span className="text-[#4ADE80] font-normal">{onlineCount} online</span>
+            </p>
+          </div>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin chat-scroll"
+        style={{ paddingBottom: 16 }}
+      >
+        <div className="text-center my-3">
+          <span className="inline-block px-3 py-1 italic rounded-full bg-[#1A1A1F] text-[#9AA0A6] border-soft text-xs">
+            You are in {TITLES[roomId] || "the Room"}. Say hello 🌙
+          </span>
+        </div>
+
         {msgs.map((m) => {
           const isMine = m.user_id === user?.id;
           const uname = profilesCache[m.user_id] || m.username || "Loading...";
           return (
-            <div key={m.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
-              {!isMine && <span className="text-[11px] text-[#888] ml-2 mb-0.5">@{uname}</span>}
-              <div className={`max-w-[80%] px-3.5 py-2.5 text-[15px] rounded-[18px] ${isMine ? "bg-[#7C3AED] text-white rounded-br-[4px]" : "bg-[#1C1C1E] text-white rounded-bl-[4px]"}`}>
-                {m.content}
+            <div key={m.id} className={`flex flex-col mb-1.5 ${isMine ? "items-end" : "items-start"}`}>
+              {!isMine && (
+                <span className="text-[11px] text-[#9AA0A6] ml-2 mb-0.5 font-medium">
+                  @{uname}
+                </span>
+              )}
+              <div className="max-w-[80%]">
+                <div
+                  className={`px-3.5 py-2.5 text-[15px] break-words ${
+                    isMine
+                      ? "bg-[#8AB4F8] text-[#0D0D0F] rounded-[18px] rounded-br-[4px]"
+                      : "bg-[#222228] text-[#E8EAED] rounded-[18px] rounded-bl-[4px]"
+                  }`}
+                >
+                  {m.content}
+                </div>
+                <div
+                  className={`mt-0.5 flex items-center gap-1 text-[11px] text-[#5F6368] ${
+                    isMine ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <span>{fmtTime(m.created_at)}</span>
+                </div>
               </div>
             </div>
           );
         })}
-        <div ref={scrollRef} />
       </div>
 
-      <div className="shrink-0 bg-black px-3 py-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)" }}>
-        <div className="flex items-end gap-2 bg-[#1C1C1E] rounded-[20px] pl-4 pr-1.5 py-1.5 min-h-[44px]">
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); send(); } }} placeholder="Message..." maxLength={1000} className="flex-1 bg-transparent outline-none text-[15px] py-2 placeholder:text-[#666]" />
-          <button onClick={send} disabled={!input.trim()} className={`h-9 w-9 rounded-full bg-[#7C3AED] flex items-center justify-center transition-opacity ${input.trim() ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-            <ArrowUp className="h-5 w-5" strokeWidth={1.5} />
+      {/* Input */}
+      <div
+        className="shrink-0 bg-[#0D0D0F] px-3 py-2 border-t border-[rgba(255,255,255,0.06)]"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)" }}
+      >
+        <div className="relative flex items-end gap-2 bg-[#2A2A32] rounded-[22px] pl-4 pr-1.5 py-1.5 min-h-[44px] border-soft">
+          {emojiPickerOpen && (
+            <div ref={pickerRef} className="absolute bottom-14 right-0 z-50">
+              <Picker
+                data={data}
+                onEmojiSelect={handleSelectEmoji}
+                theme="dark"
+                set="native"
+              />
+            </div>
+          )}
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder="Message…"
+            rows={1}
+            maxLength={1000}
+            className="flex-1 bg-transparent outline-none text-[16px] resize-none py-2 leading-5 placeholder:text-[#5F6368] max-h-[120px] text-[#E8EAED]"
+          />
+          <button
+            type="button"
+            onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
+            className="h-10 w-10 flex items-center justify-center text-[#9AA0A6] hover:text-white"
+            aria-label="Choose emoji"
+          >
+            😊
+          </button>
+          <button
+            onClick={send}
+            disabled={!input.trim()}
+            aria-label="Send"
+            className={`h-10 w-10 rounded-full flex items-center justify-center transition-opacity duration-200 ${
+              input.trim() ? "bg-[#8AB4F8] opacity-100" : "bg-[#222228] opacity-100"
+            }`}
+          >
+            <ArrowUp
+              className={`h-5 w-5 ${input.trim() ? "text-[#0D0D0F]" : "text-[#5F6368]"}`}
+              strokeWidth={2}
+            />
           </button>
         </div>
       </div>
