@@ -72,10 +72,7 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      const normalized = await normalizeCatastrophicSsrResponse(response);
-    const newHeaders = new Headers(normalized.headers);
-    newHeaders.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://static.cloudflareinsights.com; img-src 'self' data: https://*.supabase.co https:; font-src 'self' data:; worker-src 'self' blob:;");
-    return new Response(normalized.body, { status: normalized.status, headers: newHeaders });
+      return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
       return brandedErrorResponse();
