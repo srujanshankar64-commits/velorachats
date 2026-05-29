@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Heart, Users, Globe } from "lucide-react";
 
-export const Route = createFileRoute("/_authenticated/rooms")({
+export const Route = createFileRoute("/_authenticated/rooms/")({
   head: () => ({
     meta: [
       { title: "Rooms — ShhChats" },
