@@ -74,8 +74,7 @@ export default {
       const response = await handler.fetch(request, env, ctx);
       const normalized = await normalizeCatastrophicSsrResponse(response);
     const newHeaders = new Headers(normalized.headers);
-    newHeaders.delete('Content-Security-Policy');
-    newHeaders.delete('content-security-policy');
+    newHeaders.set('Content-Security-Policy', "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src * wss: ws:;");
     return new Response(normalized.body, { status: normalized.status, headers: newHeaders });
     } catch (error) {
       console.error(error);
