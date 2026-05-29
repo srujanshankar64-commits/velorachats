@@ -4,6 +4,7 @@ import { MessageCircle, Search, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useUnread } from "@/lib/unread";
+import { GHOST_USERS, loadGhostMessages } from "@/lib/ghost-users";
 
 export const Route = createFileRoute("/_authenticated/messages/")({
   head: () => ({ meta: [{ title: "Messages — ShhChats" }] }),
@@ -59,7 +60,28 @@ function Messages() {
         .limit(50);
 
       const rows = (roomsData ?? []) as RoomRow[];
-      if (rows.length === 0) { if (active) { setRooms([]); setLoading(false); } return; }
+      if (rows.length === 0) {
+        // Still check for ghost conversations before giving up
+        const ghostRows: RoomRow[] = GHOST_USERS
+          .map((g) => {
+            const msgs = loadGhostMessages(g.id);
+            if (msgs.length === 0) return null;
+            const last = msgs[msgs.length - 1];
+            return {
+              id: `ghost-${g.id}`,
+              user_a: user.id,
+              user_b: g.id,
+              created_at: last.created_at,
+              other: { id: g.id, username: g.name || g.username, avatar_url: g.avatar_url, is_online: true, last_seen_at: new Date().toISOString() },
+              last: { content: last.content, created_at: last.created_at, sender_id: last.sender_id },
+              otherLastRead: null,
+            } as RoomRow;
+          })
+          .filter(Boolean) as RoomRow[];
+        ghostRows.sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at));
+        if (active) { setRooms(ghostRows); setLoading(false); }
+        return;
+      }
 
       const otherIds = Array.from(new Set(rows.map((r) => r.user_a === user.id ? r.user_b : r.user_a)));
       const [{ data: profs }, { data: reads }, ...lastMsgs] = await Promise.all([
@@ -75,9 +97,38 @@ function Messages() {
         const otherRead = (reads ?? []).find((x) => x.room_id === r.id && x.user_id === oid);
         r.otherLastRead = otherRead?.last_read_at ?? null;
       });
+      // Merge ghost conversations (localStorage) into the list
+      const ghostRows: RoomRow[] = GHOST_USERS
+        .map((g) => {
+          const msgs = loadGhostMessages(g.id);
+          if (msgs.length === 0) return null;
+          const last = msgs[msgs.length - 1];
+          return {
+            id: `ghost-${g.id}`,
+            user_a: user.id,
+            user_b: g.id,
+            created_at: last.created_at,
+            other: {
+              id: g.id,
+              username: g.name || g.username,
+              avatar_url: g.avatar_url,
+              is_online: true,
+              last_seen_at: new Date().toISOString(),
+            },
+            last: {
+              content: last.content,
+              created_at: last.created_at,
+              sender_id: last.sender_id,
+            },
+            otherLastRead: null,
+          } as RoomRow;
+        })
+        .filter(Boolean) as RoomRow[];
+
+      const allRows = [...rows, ...ghostRows];
       // Sort by most recent message
-      rows.sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at));
-      if (active) { setRooms(rows); setLoading(false); }
+      allRows.sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at));
+      if (active) { setRooms(allRows); setLoading(false); }
     })();
     return () => { active = false; };
   }, [user]);

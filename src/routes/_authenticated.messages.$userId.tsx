@@ -1,19 +1,20 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, MoreHorizontal, Check, CheckCheck, Phone, Video } from "lucide-react";
+import { ArrowLeft, ArrowUp, MoreHorizontal, Check, CheckCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useUnread } from "@/lib/unread";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { useSwipeBack } from "@/lib/use-swipe-back";
 import { toast } from "sonner";
+import { isGhost, GHOST_MAP, loadGhostMessages, saveGhostMessages } from "@/lib/ghost-users";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 
 export const Route = createFileRoute("/_authenticated/messages/$userId")({
   head: () => ({
     meta: [
-      { title: "Chat — Velora" },
+      { title: "Chat — ShhChats" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -31,12 +32,22 @@ type Msg = {
   _local?: boolean;
   _deleting?: boolean;
 };
-type Other = { id: string; username: string; avatar_url: string | null; is_online: boolean; last_seen_at?: string | null };
+type Other = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  is_online: boolean;
+  last_seen_at?: string | null;
+};
 
 const CRISIS_RE = /\b(suicide|kill myself|end it|hurt myself|want to die)\b/i;
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function DMChat() {
@@ -46,11 +57,15 @@ function DMChat() {
   const nav = useNavigate();
   const goBack = useCallback(() => nav({ to: "/messages" }), [nav]);
 
+  // Ghost detection — computed once per userId
+  const ghostMode = isGhost(userId);
+  const ghostProfile = ghostMode ? GHOST_MAP.get(userId) : undefined;
+
   const [roomId, setRoomId] = useState<string | null>(null);
   const [other, setOther] = useState<Other | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
-  const [otherTyping, setOtherTyping] = useState(false);
+  const [otherTyping] = useState(false); // ghosts never type
   const [menuOpen, setMenuOpen] = useState(false);
   const [crisis, setCrisis] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -59,32 +74,54 @@ function DMChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  // Separate refs: one for the typing broadcast channel, one for the msgs channel
   const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const msgsChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  // Track last polled timestamp for fallback polling
   const lastPollTsRef = useRef<string>(new Date(0).toISOString());
-  
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef<number | null>(null);
   const receiverTypingTimeoutRef = useRef<number | null>(null);
-  
+
   const inset = useKeyboardInset();
   useSwipeBack(goBack);
 
   // Tab title badge
   useEffect(() => {
-    document.title = unreadTotal > 0 ? `(${unreadTotal}) Velora` : "Velora";
-    return () => { document.title = "ShhChats"; };
+    document.title = unreadTotal > 0 ? `(${unreadTotal}) ShhChats` : "ShhChats";
+    return () => {
+      document.title = "ShhChats";
+    };
   }, [unreadTotal]);
 
-  // Load room + profile + history
+  // ─── GHOST MODE: load profile + messages from localStorage ────────────────
   useEffect(() => {
-    if (!user) return;
+    if (!ghostMode || !ghostProfile || !user) return;
+    setOther({
+      id: ghostProfile.id,
+      username: ghostProfile.name || ghostProfile.username,
+      avatar_url: ghostProfile.avatar_url,
+      is_online: true,
+      last_seen_at: new Date().toISOString(),
+    });
+    setRoomId(`ghost-${userId}`);
+    setIsPartnerOnline(true);
+    const stored = loadGhostMessages(userId) as Msg[];
+    setMessages(stored);
+    if (stored.length > 0) {
+      lastPollTsRef.current = stored[stored.length - 1].created_at;
+    }
+  }, [ghostMode, ghostProfile, userId, user]);
+
+  // ─── REAL MODE: load room + profile + history from Supabase ───────────────
+  useEffect(() => {
+    if (ghostMode || !user) return;
     let active = true;
     (async () => {
       const [{ data: prof }, { data: rid, error }] = await Promise.all([
-        supabase.from("profiles").select("id,username,avatar_url,is_online,last_seen_at").eq("id", userId).single(),
+        supabase
+          .from("profiles")
+          .select("id,username,avatar_url,is_online,last_seen_at")
+          .eq("id", userId)
+          .single(),
         supabase.rpc("get_or_create_dm", { target: userId }),
       ]);
       if (!active) return;
@@ -102,53 +139,57 @@ function DMChat() {
       if (msgs) {
         const sorted = [...msgs].reverse() as Msg[];
         setMessages(sorted);
-        // Seed the poll cursor so we only fetch messages newer than what we already have
         if (sorted.length > 0) {
           lastPollTsRef.current = sorted[sorted.length - 1].created_at;
         }
       }
-      if (!document.hidden) { markRead(userId); } }
-        // Only play sound if the user is currently looking at another tab
-        if (document.hidden) {
-          if (typeof window.playChatAlert === "function") window.playChatAlert(m.sender_id, m.content);
-          audio.play().catch(e => console.log("Blocked:", e));
-        }
-
-      // Mark their messages as read now
-      await supabase
-        .from("messages")
-        .eq("room_id", rid as string)
-        .neq("sender_id", user.id)
-        .eq("is_read", false);
+      if (!document.hidden) {
+        markRead(userId);
+      }
     })();
-    return () => { active = false; };
-  }, [userId, user, markRead]);
+    return () => {
+      active = false;
+    };
+  }, [ghostMode, userId, user, markRead]);
 
-  // Real-time presence status listener for the partner (heartbeat threshold)
+  // ─── REAL MODE: presence status ───────────────────────────────────────────
   useEffect(() => {
-    if (!other) return;
+    if (ghostMode || !other) return;
     const checkOnline = () => {
-      const isOnline = other.is_online && other.last_seen_at && (Date.now() - new Date(other.last_seen_at).getTime() < 60000);
-      setIsPartnerOnline(!!isOnline);
+      const online =
+        other.is_online &&
+        other.last_seen_at &&
+        Date.now() - new Date(other.last_seen_at).getTime() < 60000;
+      setIsPartnerOnline(!!online);
     };
     checkOnline();
     const timer = setInterval(checkOnline, 10000);
     return () => clearInterval(timer);
-  }, [other]);
+  }, [ghostMode, other]);
 
-  // Real-time listener for database updates on this specific partner's profile
+  // ─── REAL MODE: profile changes listener ──────────────────────────────────
   useEffect(() => {
-    const ch = supabase.channel(`profile-partner:${userId}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+    if (ghostMode) return;
+    const ch = supabase
+      .channel(`profile-partner:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${userId}`,
+        },
         (payload) => {
           const updated = payload.new as Other & { last_seen_at?: string };
-          setOther((prev) => prev ? { ...prev, ...updated } : null);
-        })
+          setOther((prev) => (prev ? { ...prev, ...updated } : null));
+        }
+      )
       .subscribe();
     return () => {
       ch.unsubscribe();
     };
-  }, [userId]);
+  }, [ghostMode, userId]);
 
   const handleDeleteMessage = useCallback((deletedId: string) => {
     setMessages((prev) =>
@@ -159,20 +200,30 @@ function DMChat() {
     }, 400);
   }, []);
 
-  // Channel 1: postgres_changes for messages (INSERT / UPDATE / DELETE)
-  // Kept separate from broadcast so both can work independently
+  // ─── REAL MODE: postgres_changes for messages ─────────────────────────────
   useEffect(() => {
-    if (!roomId || !user) return;
+    if (ghostMode || !roomId || !user) return;
     const ch = supabase
       .channel(`msgs:${roomId}`)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `room_id=eq.${roomId}`,
+        },
         (payload) => {
           const m = payload.new as Msg;
-          // Update lastPollTs so polling doesn't duplicate
-          if (m.created_at > lastPollTsRef.current) lastPollTsRef.current = m.created_at;
+          if (m.created_at > lastPollTsRef.current)
+            lastPollTsRef.current = m.created_at;
           setMessages((prev) => {
-            const idx = prev.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
+            const idx = prev.findIndex(
+              (x) =>
+                x._local &&
+                x.sender_id === m.sender_id &&
+                x.content === m.content
+            );
             if (idx >= 0) {
               const copy = prev.slice();
               copy[idx] = m;
@@ -182,62 +233,80 @@ function DMChat() {
             return [...prev, m];
           });
           if (m.sender_id !== user.id) {
-            if (!document.hidden) { markRead(userId); } }
-        // Only play sound if the user is currently looking at another tab
-        if (document.hidden) {
-          if (typeof window.playChatAlert === "function") window.playChatAlert(m.sender_id, m.content);
-          audio.play().catch(e => console.log("Blocked:", e));
-        }
+            if (!document.hidden) {
+              markRead(userId);
+            }
           }
-        })
-      .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `room_id=eq.${roomId}`,
+        },
         (payload) => {
           const m = payload.new as Msg;
-          setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
-        })
-      .on("postgres_changes",
-        { event: "DELETE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+          setMessages((prev) =>
+            prev.map((x) => (x.id === m.id ? { ...x, ...m } : x))
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
+          filter: `room_id=eq.${roomId}`,
+        },
         (payload) => {
           const oldId = (payload.old as { id: string }).id;
           handleDeleteMessage(oldId);
-        })
+        }
+      )
       .subscribe();
     msgsChRef.current = ch;
-    return () => { ch.unsubscribe(); msgsChRef.current = null; };
-  }, [roomId, user, userId, markRead, handleDeleteMessage]);
+    return () => {
+      ch.unsubscribe();
+      msgsChRef.current = null;
+    };
+  }, [ghostMode, roomId, user, userId, markRead, handleDeleteMessage]);
 
-  // Channel 2: broadcast-only channel for typing indicator
-  // Set ref BEFORE subscribe to avoid race condition where user types before subscription completes
+  // ─── REAL MODE: broadcast typing ──────────────────────────────────────────
   useEffect(() => {
-    if (!roomId || !user) return;
+    if (ghostMode || !roomId || !user) return;
     const ch = supabase
-      .channel(`tc${roomId}`, { config: { broadcast: { self: false, ack: false } } })
+      .channel(`tc${roomId}`, {
+        config: { broadcast: { self: false, ack: false } },
+      })
       .on("broadcast", { event: "typing" }, (payload) => {
         const p = payload.payload as { from: string; typing: boolean };
         if (p.from === userId) {
-          setOtherTyping(p.typing);
           if (receiverTypingTimeoutRef.current) {
             window.clearTimeout(receiverTypingTimeoutRef.current);
             receiverTypingTimeoutRef.current = null;
           }
           if (p.typing) {
             receiverTypingTimeoutRef.current = window.setTimeout(() => {
-              setOtherTyping(false);
               receiverTypingTimeoutRef.current = null;
             }, 4000);
           }
         }
       });
-    // Set ref BEFORE subscribe so broadcastTyping works immediately
     typingChRef.current = ch;
     ch.subscribe();
-    return () => { ch.unsubscribe(); typingChRef.current = null; };
-  }, [roomId, user, userId]);
+    return () => {
+      ch.unsubscribe();
+      typingChRef.current = null;
+    };
+  }, [ghostMode, roomId, user, userId]);
 
-  // Polling fallback: fetch new messages every 3s in case WebSocket drops
+  // ─── REAL MODE: polling fallback ──────────────────────────────────────────
   useEffect(() => {
-    if (!roomId || !user) return;
+    if (ghostMode || !roomId || !user) return;
     const poll = async () => {
       const since = lastPollTsRef.current;
       const { data } = await supabase
@@ -247,27 +316,29 @@ function DMChat() {
         .gt("created_at", since)
         .order("created_at", { ascending: true });
       if (!data || data.length === 0) return;
-      // Update lastPollTs to the newest message
       lastPollTsRef.current = data[data.length - 1].created_at;
       setMessages((prev) => {
         let next = [...prev];
         for (const m of data as Msg[]) {
-          // Replace optimistic local message if exists
-          const idx = next.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
-          if (idx >= 0) { next[idx] = m; continue; }
-          // Skip if already in list
+          const idx = next.findIndex(
+            (x) =>
+              x._local &&
+              x.sender_id === m.sender_id &&
+              x.content === m.content
+          );
+          if (idx >= 0) {
+            next[idx] = m;
+            continue;
+          }
           if (next.some((x) => x.id === m.id)) continue;
           next = [...next, m];
-          // Auto-mark incoming messages as read
-          if (m.sender_id !== user.id) {
-          }
         }
         return next;
       });
     };
     const interval = window.setInterval(poll, 1000);
     return () => window.clearInterval(interval);
-  }, [roomId, user]);
+  }, [ghostMode, roomId, user]);
 
   // Auto-scroll
   useEffect(() => {
@@ -278,7 +349,10 @@ function DMChat() {
   // Close emoji picker on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(e.target as Node)
+      ) {
         setEmojiPickerOpen(false);
       }
     };
@@ -288,38 +362,49 @@ function DMChat() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [emojiPickerOpen]);
 
-  const broadcastTyping = useCallback((typing: boolean) => {
-    const ch = typingChRef.current;
-    if (!ch || !user) return;
-    ch.send({ type: "broadcast", event: "typing", payload: { from: user.id, typing } });
-  }, [user]);
+  const broadcastTyping = useCallback(
+    (typing: boolean) => {
+      if (ghostMode) return; // ghosts don't broadcast
+      const ch = typingChRef.current;
+      if (!ch || !user) return;
+      ch.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { from: user.id, typing },
+      });
+    },
+    [ghostMode, user]
+  );
 
-  const onInputChange = useCallback((v: string) => {
-    setInput(v);
-    if (!isTypingRef.current) {
-      isTypingRef.current = true;
-      broadcastTyping(true);
-    }
-    if (typingTimeoutRef.current) {
-      window.clearTimeout(typingTimeoutRef.current);
-    }
-    typingTimeoutRef.current = window.setTimeout(() => {
-      isTypingRef.current = false;
-      broadcastTyping(false);
-      typingTimeoutRef.current = null;
-    }, 2000);
-  }, [broadcastTyping]);
+  const onInputChange = useCallback(
+    (v: string) => {
+      setInput(v);
+      if (!isTypingRef.current) {
+        isTypingRef.current = true;
+        broadcastTyping(true);
+      }
+      if (typingTimeoutRef.current) {
+        window.clearTimeout(typingTimeoutRef.current);
+      }
+      typingTimeoutRef.current = window.setTimeout(() => {
+        isTypingRef.current = false;
+        broadcastTyping(false);
+        typingTimeoutRef.current = null;
+      }, 2000);
+    },
+    [broadcastTyping]
+  );
 
-  const handleSelectEmoji = (emoji: any) => {
+  const handleSelectEmoji = (emoji: { native: string }) => {
     setInput((prev) => prev + emoji.native);
     inputRef.current?.focus();
   };
 
   async function send() {
     const text = input.trim();
-    if (!text || !roomId || !user) return;
+    if (!text || !user) return;
     setInput("");
-    
+
     if (typingTimeoutRef.current) {
       window.clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
@@ -331,7 +416,25 @@ function DMChat() {
 
     if (CRISIS_RE.test(text)) setCrisis(true);
 
-    // Optimistic
+    // ── GHOST MODE send: localStorage only ──────────────────────────────────
+    if (ghostMode) {
+      const newMsg: Msg = {
+        id: "ghost-" + Date.now(),
+        sender_id: user.id,
+        content: text,
+        created_at: new Date().toISOString(),
+        status: "sent",
+      };
+      setMessages((prev) => {
+        const next = [...prev, newMsg];
+        saveGhostMessages(userId, next);
+        return next;
+      });
+      return;
+    }
+
+    // ── REAL MODE send ───────────────────────────────────────────────────────
+    if (!roomId) return;
     const tempId = "local-" + Date.now();
     const optimistic: Msg = {
       id: tempId,
@@ -343,38 +446,53 @@ function DMChat() {
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    const { error } = await supabase.from("messages").insert({ room_id: roomId, sender_id: user.id, content: text });
+    const { error } = await supabase
+      .from("messages")
+      .insert({ room_id: roomId, sender_id: user.id, content: text });
     if (error) {
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m))
+      );
       toast.error("Couldn't send");
     }
   }
 
   async function blockUser() {
-    if (!user) return;
-    await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: userId });
+    if (!user || ghostMode) return;
+    await supabase
+      .from("blocked_users")
+      .insert({ blocker_id: user.id, blocked_id: userId });
     toast.success("User blocked.");
     setMenuOpen(false);
     goBack();
   }
+
   async function reportUser(reason: string) {
-    if (!user) return;
-    await supabase.from("reports").insert({ reporter_id: user.id, reported_id: userId, reason });
+    if (!user || ghostMode) return;
+    await supabase
+      .from("reports")
+      .insert({ reporter_id: user.id, reported_id: userId, reason });
     toast.success("Report submitted.");
     setMenuOpen(false);
   }
 
   useEffect(() => {
     if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
   const myLastMessageAt = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender_id === user?.id) return messages[i].created_at;
+    for (let i = messages.length - 1; i >= 0; i--)
+      if (messages[i].sender_id === user?.id) return messages[i].created_at;
     return null;
   }, [messages, user?.id]);
+
+  // ghost profile extras for the header
+  const ghostExtra = ghostMode ? GHOST_MAP.get(userId) : undefined;
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#0D0D0F] text-[#E8EAED]">
@@ -387,34 +505,73 @@ function DMChat() {
           <div className="flex-1 min-w-0 flex items-center gap-2.5">
             <div className="relative">
               {other.avatar_url ? (
-                <img src={other.avatar_url} alt="" loading="lazy" width={36} height={36} className="h-9 w-9 rounded-full" />
+                <img
+                  src={other.avatar_url}
+                  alt=""
+                  loading="lazy"
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 rounded-full"
+                />
               ) : (
-                <div className="h-9 w-9 rounded-full bg-[#8AB4F8] text-[#0D0D0F] flex items-center justify-center text-sm font-semibold">{other.username[0]?.toUpperCase()}</div>
+                <div className="h-9 w-9 rounded-full bg-[#8AB4F8] text-[#0D0D0F] flex items-center justify-center text-sm font-semibold">
+                  {other.username[0]?.toUpperCase()}
+                </div>
               )}
-              <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#1A1A1F] ${isPartnerOnline ? "bg-[#4ADE80]" : "bg-[#5F6368]"}`} />
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#1A1A1F] ${isPartnerOnline ? "bg-[#4ADE80]" : "bg-[#5F6368]"}`}
+              />
             </div>
             <div className="min-w-0">
-              <p className="text-sm text-[#E8EAED] truncate leading-tight">{other.username}</p>
+              <p className="text-sm text-[#E8EAED] truncate leading-tight font-medium">
+                {other.username}
+                {ghostExtra && (
+                  <span className="ml-1.5 text-[11px] text-[#9AA0A6] font-normal">
+                    {ghostExtra.age} y/o · {ghostExtra.state}
+                  </span>
+                )}
+              </p>
               <p className="text-[11px] text-[#9AA0A6] leading-tight">
-                {otherTyping ? <span className="text-[#4ADE80]">typing…</span> : isPartnerOnline ? "online" : "offline"}
+                {isPartnerOnline ? (
+                  <span className="text-[#4ADE80]">online</span>
+                ) : (
+                  "offline"
+                )}
               </p>
             </div>
           </div>
         )}
-        <button onClick={() => setMenuOpen(true)} className="p-2 -mr-2" aria-label="More">
-          <MoreHorizontal className="h-5 w-5" strokeWidth={1.5} />
-        </button>
+        {!ghostMode && (
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="p-2 -mr-2"
+            aria-label="More"
+          >
+            <MoreHorizontal className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+        )}
       </header>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin chat-scroll" style={{ paddingBottom: 16 }}>
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin chat-scroll"
+        style={{ paddingBottom: 16 }}
+      >
         <div className="text-center my-3">
           <span className="inline-block px-3 py-1 italic rounded-full bg-[#1A1A1F] text-[#9AA0A6] border-soft">
-            You're both up late. Say hello 🌙
+            {ghostExtra
+              ? `${ghostExtra.name} is online. Say hi 🌙`
+              : "You're both up late. Say hello 🌙"}
           </span>
         </div>
         {messages.map((m) => (
-          <Bubble key={m.id} m={m} mine={m.sender_id === user!.id} myLastAt={myLastMessageAt} />
+          <Bubble
+            key={m.id}
+            m={m}
+            mine={m.sender_id === user!.id}
+            myLastAt={myLastMessageAt}
+          />
         ))}
         {crisis && (
           <div className="text-center my-3">
@@ -423,21 +580,16 @@ function DMChat() {
             </span>
           </div>
         )}
-        {otherTyping && (
-          <div className="flex justify-start mb-1">
-            <div className="bg-[#222228] rounded-[18px] rounded-bl-[4px] px-4 py-3 flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#9AA0A6] dot-bounce-1" />
-              <span className="h-1.5 w-1.5 rounded-full bg-[#9AA0A6] dot-bounce-2" />
-              <span className="h-1.5 w-1.5 rounded-full bg-[#9AA0A6] dot-bounce-3" />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Input */}
       <div
         className="shrink-0 bg-[#0D0D0F] px-3 py-2 border-t border-[rgba(255,255,255,0.06)]"
-        style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + 8px)`, transform: inset ? `translateY(-${inset}px)` : undefined, transition: "transform 200ms ease" }}
+        style={{
+          paddingBottom: `calc(env(safe-area-inset-bottom) + 8px)`,
+          transform: inset ? `translateY(-${inset}px)` : undefined,
+          transition: "transform 200ms ease",
+        }}
       >
         <div className="relative flex items-end gap-2 bg-[#2A2A32] rounded-[22px] pl-4 pr-1.5 py-1.5 min-h-[44px] border-soft">
           {emojiPickerOpen && (
@@ -454,7 +606,12 @@ function DMChat() {
             ref={inputRef}
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
             placeholder="Message…"
             rows={1}
             maxLength={2000}
@@ -474,21 +631,55 @@ function DMChat() {
             aria-label="Send"
             className={`h-10 w-10 rounded-full flex items-center justify-center transition-opacity duration-200 ${input.trim() ? "bg-[#8AB4F8] opacity-100" : "bg-[#222228] opacity-100"}`}
           >
-            <ArrowUp className={`h-5 w-5 ${input.trim() ? "text-[#0D0D0F]" : "text-[#5F6368]"}`} strokeWidth={2} />
+            <ArrowUp
+              className={`h-5 w-5 ${input.trim() ? "text-[#0D0D0F]" : "text-[#5F6368]"}`}
+              strokeWidth={2}
+            />
           </button>
         </div>
       </div>
 
-      {/* Bottom sheet menu */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-end" onClick={() => setMenuOpen(false)}>
-          <div className="w-full bg-[#1A1A1F] rounded-t-3xl p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] fade-up border-t border-[rgba(255,255,255,0.08)]" onClick={(e) => e.stopPropagation()}>
+      {/* Bottom sheet menu — only for real users */}
+      {menuOpen && !ghostMode && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 flex items-end"
+          onClick={() => setMenuOpen(false)}
+        >
+          <div
+            className="w-full bg-[#1A1A1F] rounded-t-3xl p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] fade-up border-t border-[rgba(255,255,255,0.08)]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="h-1 w-10 rounded-full bg-[#5F6368] mx-auto mb-4" />
-            <button onClick={() => reportUser("Spam")} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm">Report spam</button>
-            <button onClick={() => reportUser("Harassment")} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm">Report harassment</button>
-            <button onClick={() => reportUser("Inappropriate")} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm">Report inappropriate</button>
-            <button onClick={blockUser} className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm text-[#F87171]">Block this person</button>
-            <button onClick={() => setMenuOpen(false)} className="w-full h-12 mt-2 rounded-full bg-[#0D0D0F] text-sm">Cancel</button>
+            <button
+              onClick={() => reportUser("Spam")}
+              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm"
+            >
+              Report spam
+            </button>
+            <button
+              onClick={() => reportUser("Harassment")}
+              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm"
+            >
+              Report harassment
+            </button>
+            <button
+              onClick={() => reportUser("Inappropriate")}
+              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm"
+            >
+              Report inappropriate
+            </button>
+            <button
+              onClick={blockUser}
+              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm text-[#F87171]"
+            >
+              Block this person
+            </button>
+            <button
+              onClick={() => setMenuOpen(false)}
+              className="w-full h-12 mt-2 rounded-full bg-[#0D0D0F] text-sm"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -496,29 +687,56 @@ function DMChat() {
   );
 }
 
-const Bubble = memo(function Bubble({ m, mine, myLastAt }: { m: Msg; mine: boolean; myLastAt: string | null }) {
+const Bubble = memo(function Bubble({
+  m,
+  mine,
+  myLastAt,
+}: {
+  m: Msg;
+  mine: boolean;
+  myLastAt: string | null;
+}) {
   const isMyLast = mine && myLastAt === m.created_at;
   const failed = m.status === "failed";
   const sending = m._local && m.status === "sending";
   const seen = !!m.read_at;
   const delivered = !!m.delivered_at;
   return (
-    <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"} transition-all duration-400 ease-in-out ${m._deleting ? "opacity-0 scale-95 max-h-0 mb-0 overflow-hidden" : ""}`}>
+    <div
+      className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"} transition-all duration-400 ease-in-out ${m._deleting ? "opacity-0 scale-95 max-h-0 mb-0 overflow-hidden" : ""}`}
+    >
       <div className="max-w-[80%]">
-        <div className={`px-3.5 py-2.5 text-[15px] break-words ${mine
-            ? "bg-[#8AB4F8] text-[#0D0D0F] rounded-[18px] rounded-br-[4px]"
-            : "bg-[#222228] text-[#E8EAED] rounded-[18px] rounded-bl-[4px]"}`}>
+        <div
+          className={`px-3.5 py-2.5 text-[15px] break-words ${
+            mine
+              ? "bg-[#8AB4F8] text-[#0D0D0F] rounded-[18px] rounded-br-[4px]"
+              : "bg-[#222228] text-[#E8EAED] rounded-[18px] rounded-bl-[4px]"
+          }`}
+        >
           {m.content}
         </div>
-        <div className={`mt-0.5 flex items-center gap-1 text-[11px] text-[#5F6368] ${mine ? "justify-end" : "justify-start"}`}>
+        <div
+          className={`mt-0.5 flex items-center gap-1 text-[11px] text-[#5F6368] ${mine ? "justify-end" : "justify-start"}`}
+        >
           <span>{fmtTime(m.created_at)}</span>
-          {mine && (
-            failed ? <span className="text-[#F87171]">failed</span>
-            : sending ? <span className="text-[#5F6368]">…</span>
-            : isMyLast && seen ? <CheckCheck className="h-3 w-3 text-[#8AB4F8]" strokeWidth={2} />
-            : isMyLast && delivered ? <CheckCheck className="h-3 w-3 text-[#5F6368]" strokeWidth={2} />
-            : isMyLast ? <Check className="h-3 w-3 text-[#5F6368]" strokeWidth={2} /> : null
-          )}
+          {mine &&
+            (failed ? (
+              <span className="text-[#F87171]">failed</span>
+            ) : sending ? (
+              <span className="text-[#5F6368]">…</span>
+            ) : isMyLast && seen ? (
+              <CheckCheck
+                className="h-3 w-3 text-[#8AB4F8]"
+                strokeWidth={2}
+              />
+            ) : isMyLast && delivered ? (
+              <CheckCheck
+                className="h-3 w-3 text-[#5F6368]"
+                strokeWidth={2}
+              />
+            ) : isMyLast ? (
+              <Check className="h-3 w-3 text-[#5F6368]" strokeWidth={2} />
+            ) : null)}
         </div>
       </div>
     </div>
