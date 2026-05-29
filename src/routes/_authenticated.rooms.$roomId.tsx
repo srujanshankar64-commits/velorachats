@@ -80,20 +80,24 @@ function Room() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "room_messages", filter: `room_id=eq.${roomId}` },
         async (payload) => {
-          const newMsg = payload.new as any;
-          let username = profilesCache[newMsg.user_id];
-          if (!username) {
-            const { data: pData } = await supabase.from("profiles").select("username").eq("id", newMsg.user_id).single();
+          const newMsg = payload.new as Record<string, any>;
+          if (!newMsg) return;
+
+          const msgUserId = String(newMsg.user_id || "");
+          let username = profilesCache[msgUserId];
+          
+          if (!username && msgUserId) {
+            const { data: pData } = await supabase.from("profiles").select("username").eq("id", msgUserId).single();
             username = pData?.username || "unknown";
-            setProfilesCache((prev) => ({ ...prev, [newMsg.user_id]: username }));
+            setProfilesCache((prev) => ({ ...prev, [msgUserId]: username }));
           }
 
           const completeMsg: Msg = {
-            id: newMsg.id,
-            user_id: newMsg.user_id,
-            content: newMsg.content,
-            created_at: newMsg.created_at,
-            username: username,
+            id: String(newMsg.id || ""),
+            user_id: msgUserId,
+            content: String(newMsg.content || ""),
+            created_at: String(newMsg.created_at || ""),
+            username: username || "unknown",
           };
 
           setMsgs((prev) => prev.some((m) => m.id === completeMsg.id) ? prev : [...prev, completeMsg]);
