@@ -1,11 +1,12 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { startPresence } from "@/lib/presence";
 import { AppShell } from "@/components/app-shell";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { startPresence } from "@/lib/presence";
-import { supabase } from "@/integrations/supabase/client";
+import { useGlobalDMListener } from "@/hooks/use-notifications";
 
 export const Route = createFileRoute("/_authenticated")({
   component: Layout,
@@ -15,6 +16,34 @@ function Layout() {
   const { user, loading } = useAuth();
   const nav = useNavigate();
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+
+  // Get active chat userId from route params (works on /messages/$userId)
+  const params = useParams({ strict: false }) as any;
+  const activeChatUserId = params?.userId ?? null;
+
+  // 🔔 Global DM notification listener
+  useGlobalDMListener({
+    currentUserId: user?.id,
+    activeChatUserId,
+  });
+
+  // Register service worker + handle notification click → navigate
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(console.error);
+      navigator.serviceWorker.addEventListener("message", (e) => {
+        if (e.data?.type === "OPEN_CHAT" && e.data.chatUserId) {
+          nav({ to: "/messages/$userId", params: { userId: e.data.chatUserId } });
+        }
+      });
+    }
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      nav({ to: "/messages/$userId", params: { userId: detail.chatUserId } });
+    };
+    window.addEventListener("velora:openChat", handler);
+    return () => window.removeEventListener("velora:openChat", handler);
+  }, [nav]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -56,5 +85,6 @@ function Layout() {
       </div>
     );
   }
+
   return <AppShell><Outlet /></AppShell>;
 }
