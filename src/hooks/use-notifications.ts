@@ -3,24 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 function playNotificationSound() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const playTone = (freq: number, startTime: number, duration: number, gain = 0.35) => {
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, startTime);
-      gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(gain, startTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-      osc.start(startTime);
-      osc.stop(startTime + duration);
-    };
-    const now = ctx.currentTime;
-    playTone(1318, now, 0.18);
-    playTone(1567, now + 0.13, 0.25);
-  } catch {}
+    const a = new Audio("/notify.mp3");
+    a.volume = 0.7;
+    a.play().catch(() => {});
+  } catch (_) {}
 }
 
 let tabBadgeCount = 0;
@@ -108,7 +94,6 @@ export function useGlobalDMListener({ currentUserId, activeChatUserId }: UseNoti
   useEffect(() => {
     if (!currentUserId) return;
 
-    // Step 1: get all room IDs where current user is user_a or user_b
     const setupListener = async () => {
       const { data: rooms } = await supabase
         .from("chat_rooms")
@@ -120,13 +105,11 @@ export function useGlobalDMListener({ currentUserId, activeChatUserId }: UseNoti
 
       const roomIds = rooms.map((r: any) => r.id);
 
-      // Build a map: roomId -> other user's ID
       const roomToOtherUser: Record<string, string> = {};
       rooms.forEach((r: any) => {
         roomToOtherUser[r.id] = r.user_a === currentUserId ? r.user_b : r.user_a;
       });
 
-      // Step 2: listen for new messages in those rooms
       const channel = supabase
         .channel(`dm-notifications:${currentUserId}`)
         .on("postgres_changes", {
@@ -136,13 +119,11 @@ export function useGlobalDMListener({ currentUserId, activeChatUserId }: UseNoti
         }, async (payload) => {
           const msg = payload.new as any;
 
-          // Only care about messages in our DM rooms from someone else
           if (!roomIds.includes(msg.room_id)) return;
           if (msg.sender_id === currentUserId) return;
 
           const otherUserId = roomToOtherUser[msg.room_id];
 
-          // Fetch sender profile
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, avatar_url, username")
