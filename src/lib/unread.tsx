@@ -13,8 +13,7 @@ interface UnreadCtx {
 
 const Ctx = createContext<UnreadCtx>({ unread: {}, total: 0, markRead: async () => {} });
 
-// ─── Audio: play notification.mp3 (Facebook-style sound in /public) ──────────
-// Keep a single reusable Audio element to avoid creating new ones repeatedly
+// ─── Audio: play notify.mp3 ───────────────────────────────────────────────────
 let _audio: HTMLAudioElement | null = null;
 
 function getAudio(): HTMLAudioElement | null {
@@ -31,7 +30,6 @@ function getAudio(): HTMLAudioElement | null {
 function unlockAudio() {
   const a = getAudio();
   if (!a) return;
-  // A silent play+pause pre-loads the file and satisfies browser autoplay policy
   a.play().then(() => a.pause()).catch(() => {});
   a.currentTime = 0;
 }
@@ -41,25 +39,7 @@ function playNotificationSound() {
     const a = getAudio();
     if (!a) return;
     a.currentTime = 0;
-    a.play().catch(() => {
-      // Fallback: Web Audio API two-tone ping if mp3 fails
-      const Cls = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!Cls) return;
-      const ctx = new Cls();
-      const tone = (freq: number, t0: number, dur: number, vol: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.type = "sine"; osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0, ctx.currentTime + t0);
-        gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + t0 + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t0 + dur);
-        osc.start(ctx.currentTime + t0);
-        osc.stop(ctx.currentTime + t0 + dur);
-      };
-      tone(880, 0, 0.14, 0.4);
-      tone(1100, 0.15, 0.20, 0.28);
-    });
+    a.play().catch(() => {});
   } catch (_) {}
 }
 
@@ -67,7 +47,6 @@ function playNotificationSound() {
 function showBrowserNotification(title: string, body: string, tag: string, onClick: () => void) {
   if (typeof window === "undefined" || !("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
-  // Show when tab is hidden OR just show always for reliability
   const n = new Notification(title, {
     body,
     tag,
@@ -85,7 +64,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
   const roomMapRef  = useRef<Map<string, string>>(new Map());
   const nameCache   = useRef<Map<string, string>>(new Map());
 
-  // Unlock AudioContext on first user gesture (required by Chrome autoplay policy)
+  // Unlock audio on first user gesture
   useEffect(() => {
     const unlock = () => unlockAudio();
     document.addEventListener("click",      unlock, { once: true });
@@ -98,7 +77,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Ask for browser notification permission on user gesture (click), keeps listener active until permission is granted or denied
+  // Ask for browser notification permission on user gesture
   useEffect(() => {
     if (!user) return;
     const ask = () => {
@@ -175,7 +154,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       const path = typeof window !== "undefined" ? window.location.pathname : "";
       const isViewing = path === `/messages/${otherId}`;
 
-      // Play sound always (user must have clicked once to unlock AudioContext)
+      // Play notify.mp3 only
       playNotificationSound();
 
       if (!isViewing) {
@@ -185,7 +164,6 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       const name    = await getSenderName(otherId);
       const preview = m.content.length > 80 ? m.content.slice(0, 80) + "…" : m.content;
 
-      // Browser push notification (works when tab is minimised / hidden)
       showBrowserNotification(`💬 ${name}`, preview, `msg-${otherId}`,
         () => { window.location.href = `/messages/${otherId}`; });
 
@@ -209,7 +187,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
               if (data) {
                 const oid = data.user_a === me ? data.user_b : data.user_a;
                 roomMapRef.current.set(data.id, oid);
-                triggerNotification(oid, m); if (typeof (window as any).playChatAlert === 'function') { (window as any).playChatAlert(m.sender_id, m.content); }
+                triggerNotification(oid, m);
               }
             });
         } else {
