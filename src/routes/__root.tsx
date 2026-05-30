@@ -86,7 +86,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
-        <script dangerouslySetInnerHTML={{ __html: `function initChatNotifications(){if(!("Notification"in window))return;if(Notification.permission!=="granted"&&Notification.permission!=="denied"){Notification.requestPermission();}}function playChatAlert(s,t){var a=new Audio("/notification.mp3");a.volume=1.0;a.play().catch(function(){});if(window.Notification&&Notification.permission==="granted"){try{new Notification("New message from "+(s||"Someone"),{body:t||"Sent a message",icon:"/favicon.svg",tag:"shhchats-message",renotify:true});}catch(e){}}}window.playChatAlert=playChatAlert;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",initChatNotifications);}else{initChatNotifications();}` }} />
+        <script dangerouslySetInnerHTML={{ __html: `function initChatNotifications(){if(!("Notification"in window))return;if(Notification.permission!=="granted"&&Notification.permission!=="denied"){Notification.requestPermission();}}function playChatAlert(s,t){var a=new Audio("/notify.mp3");a.volume=1.0;a.play().catch(function(){});if(window.Notification&&Notification.permission==="granted"){try{new Notification("New message from "+(s||"Someone"),{body:t||"Sent a message",icon:"/favicon.svg",tag:"shhchats-message",renotify:true});}catch(e){}}}window.playChatAlert=playChatAlert;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",initChatNotifications);}else{initChatNotifications();}` }} />
         
         
         {/* Monetag Vignette Banner */}
