@@ -20,7 +20,7 @@ let _audio: HTMLAudioElement | null = null;
 function getAudio(): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
   if (!_audio) {
-    _audio = new Audio("/notification.mp3");
+    _audio = new Audio("/notify.mp3");
     _audio.volume = 0.7;
     _audio.preload = "auto";
   }
