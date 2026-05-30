@@ -1,5 +1,6 @@
+cat > /mnt/user-data/outputs/rooms-roomId.tsx << 'EOF'
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUp, Heart, Users, Globe } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -8,7 +9,7 @@ import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 
 export const Route = createFileRoute("/_authenticated/rooms/$roomId")({
-  head: () => ({ meta: [{ title: "Room - Velora" }] }),
+  head: () => ({ meta: [{ title: "Room - ShhChats" }] }),
   component: Room,
 });
 
@@ -18,6 +19,7 @@ type Msg = {
   content: string;
   created_at: string;
   username?: string;
+  temp?: boolean;
 };
 
 const TITLES: Record<string, string> = {
@@ -69,10 +71,7 @@ function Room() {
   // Close emoji picker on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        pickerRef.current &&
-        !pickerRef.current.contains(e.target as Node)
-      ) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
         setEmojiPickerOpen(false);
       }
     };
@@ -82,7 +81,7 @@ function Room() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [emojiPickerOpen]);
 
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -91,20 +90,13 @@ function Room() {
   // Supabase Presence for live user count
   useEffect(() => {
     if (!user) return;
-
     const presenceChannel = supabase.channel(`room_presence:${roomId}`, {
-      config: {
-        presence: {
-          key: user.id,
-        },
-      },
+      config: { presence: { key: user.id } },
     });
-
     presenceChannel
       .on("presence", { event: "sync" }, () => {
         const state = presenceChannel.presenceState();
-        const count = Object.keys(state).length;
-        setOnlineCount(count);
+        setOnlineCount(Object.keys(state).length);
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -114,10 +106,7 @@ function Room() {
           });
         }
       });
-
-    return () => {
-      supabase.removeChannel(presenceChannel);
-    };
+    return () => { supabase.removeChannel(presenceChannel); };
   }, [roomId, user]);
 
   // Fetch messages and subscribe to inserts
@@ -168,7 +157,11 @@ function Room() {
           let username = profilesCacheRef.current[msgUserId];
 
           if (!username && msgUserId) {
-            const { data: pData } = await supabase.from("profiles").select("username").eq("id", msgUserId).single();
+            const { data: pData } = await supabase
+              .from("profiles")
+              .select("username")
+              .eq("id", msgUserId)
+              .single();
             username = pData?.username || "unknown";
             setProfilesCache((prev) => ({ ...prev, [msgUserId]: username }));
           }
@@ -181,7 +174,16 @@ function Room() {
             username: username || "unknown",
           };
 
-          setMsgs((prev) => prev.some((m) => m.id === completeMsg.id) ? prev : [...prev, completeMsg]);
+          // Replace temp message if it exists, otherwise add new
+          setMsgs((prev) => {
+            const hasReal = prev.some((m) => m.id === completeMsg.id);
+            if (hasReal) return prev;
+            // Remove matching temp message from same user with same content
+            const filtered = prev.filter(
+              (m) => !(m.temp && m.user_id === completeMsg.user_id && m.content === completeMsg.content)
+            );
+            return [...filtered, completeMsg];
+          });
         }
       )
       .subscribe();
@@ -196,6 +198,19 @@ function Room() {
     if (!input.trim() || !user?.id) return;
     const msgContent = input.trim();
     setInput("");
+    inputRef.current?.focus();
+
+    // Optimistic update — show message instantly
+    const tempId = `temp-${Date.now()}`;
+    const tempMsg: Msg = {
+      id: tempId,
+      user_id: user.id,
+      content: msgContent,
+      created_at: new Date().toISOString(),
+      username: profilesCache[user.id] || "You",
+      temp: true,
+    };
+    setMsgs((prev) => [...prev, tempMsg]);
 
     const { error } = await supabase.from("room_messages").insert({
       room_id: roomId,
@@ -203,7 +218,11 @@ function Room() {
       content: msgContent,
     });
 
-    if (error) toast.error("Failed to deliver message");
+    if (error) {
+      toast.error("Failed to deliver message");
+      // Remove temp message on error
+      setMsgs((prev) => prev.filter((m) => m.id !== tempId));
+    }
   };
 
   const handleSelectEmoji = (emoji: { native: string }) => {
@@ -253,7 +272,7 @@ function Room() {
 
         {msgs.map((m) => {
           const isMine = m.user_id === user?.id;
-          const uname = profilesCache[m.user_id] || m.username || "Loading...";
+          const uname = profilesCache[m.user_id] || m.username || "...";
           return (
             <div key={m.id} className={`flex flex-col mb-1.5 ${isMine ? "items-end" : "items-start"}`}>
               {!isMine && (
@@ -267,7 +286,7 @@ function Room() {
                     isMine
                       ? "bg-[#8AB4F8] text-[#0D0D0F] rounded-[18px] rounded-br-[4px]"
                       : "bg-[#222228] text-[#E8EAED] rounded-[18px] rounded-bl-[4px]"
-                  }`}
+                  } ${m.temp ? "opacity-70" : "opacity-100"}`}
                 >
                   {m.content}
                 </div>
@@ -277,6 +296,7 @@ function Room() {
                   }`}
                 >
                   <span>{fmtTime(m.created_at)}</span>
+                  {m.temp && <span className="text-[#5F6368]">•</span>}
                 </div>
               </div>
             </div>
@@ -292,12 +312,7 @@ function Room() {
         <div className="relative flex items-end gap-2 bg-[#2A2A32] rounded-[22px] pl-4 pr-1.5 py-1.5 min-h-[44px] border-soft">
           {emojiPickerOpen && (
             <div ref={pickerRef} className="absolute bottom-14 right-0 z-50">
-              <Picker
-                data={data}
-                onEmojiSelect={handleSelectEmoji}
-                theme="dark"
-                set="native"
-              />
+              <Picker data={data} onEmojiSelect={handleSelectEmoji} theme="dark" set="native" />
             </div>
           )}
           <textarea
@@ -341,3 +356,4 @@ function Room() {
     </div>
   );
 }
+EOF
