@@ -155,7 +155,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       const isViewing = path === `/messages/${otherId}`;
 
       // Play notify.mp3 only
-      playNotificationSound();
+      
 
       if (!isViewing) {
         setUnread((u) => ({ ...u, [otherId]: (u[otherId] ?? 0) + 1 }));
