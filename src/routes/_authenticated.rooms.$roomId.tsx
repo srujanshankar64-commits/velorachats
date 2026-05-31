@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/rooms-roomId.tsx << 'EOF'
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUp, Heart, Users, Globe } from "lucide-react";
