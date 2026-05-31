@@ -573,7 +573,16 @@ function DMChat() {
             myLastAt={myLastMessageAt}
           />
         ))}
-        {crisis && (
+        {otherTyping && (
+        <div className="flex items-end gap-2 px-1 py-1">
+          <div className="flex items-center gap-1 bg-[#1A1A1F] rounded-2xl rounded-bl-sm px-4 py-3">
+            <span className="w-2 h-2 rounded-full bg-[#8AB4F8] animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 rounded-full bg-[#8AB4F8] animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 rounded-full bg-[#8AB4F8] animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
+      )}
+      {crisis && (
           <div className="text-center my-3">
             <span className="inline-block px-3 py-1.5 text-[11px] rounded-full bg-accent-soft text-[#8AB4F8] border border-[rgba(138,180,248,0.20)]">
               💙 iCall: 9152987821 · Vandrevala: 1860-2662-345
