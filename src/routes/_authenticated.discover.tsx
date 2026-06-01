@@ -37,6 +37,7 @@ function Discover() {
   // allUsers holds the full unfiltered list from DB — filtering is done client-side
   const [allUsers, setAllUsers] = useState<Profile[] | null>(null);
   const [meState, setMeState] = useState<string | null>(null);
+  const [friendships, setFriendships] = useState<Record<string, string>>({});
 
   // Fetch current user's state once
   useEffect(() => {
@@ -48,6 +49,22 @@ function Discover() {
       .single()
       .then(({ data }) => {
         setMeState((data as { state?: string | null } | null)?.state ?? null);
+      });
+
+    // Fetch friendships to know who we added
+    supabase
+      .from("friendships")
+      .select("*")
+      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const fs: Record<string, string> = {};
+          data.forEach(f => {
+            const otherId = f.requester_id === user.id ? f.addressee_id : f.requester_id;
+            fs[otherId] = f.status;
+          });
+          setFriendships(fs);
+        }
       });
   }, [user]);
 
@@ -142,6 +159,27 @@ function Discover() {
     nav({ to: "/messages/$userId", params: { userId: targetId } });
   }
 
+  async function handleAddFriend(targetId: string) {
+    if (!user) return;
+    setFriendships(prev => ({ ...prev, [targetId]: "pending" }));
+    const { error } = await supabase.from("friendships").insert({
+      requester_id: user.id,
+      addressee_id: targetId,
+      status: "pending"
+    });
+    if (error) {
+      toast.error(error.message);
+      // Revert optimism if failed
+      setFriendships(prev => {
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
+      });
+    } else {
+      toast.success("Friend request sent!");
+    }
+  }
+
   return (
     <div className="min-h-[100dvh] warm-page">
       <div className="max-w-2xl mx-auto px-4 pt-5 pb-6">
@@ -211,7 +249,14 @@ function Discover() {
         ) : (
           <div className="flex flex-col gap-2">
             {list.map((p, idx) => (
-              <PersonCard key={p.id} p={p} primaryAction={idx === 0} onAction={() => openDM(p.id)} />
+              <PersonCard 
+                key={p.id} 
+                p={p} 
+                primaryAction={idx === 0} 
+                friendshipStatus={friendships[p.id]}
+                onChat={() => openDM(p.id)} 
+                onAdd={() => handleAddFriend(p.id)}
+              />
             ))}
           </div>
         )}
@@ -220,11 +265,14 @@ function Discover() {
   );
 }
 
-const PersonCard = memo(function PersonCard({ p, primaryAction, onAction }: { p: Profile; primaryAction: boolean; onAction: () => void }) {
+const PersonCard = memo(function PersonCard({ p, primaryAction, friendshipStatus, onChat, onAdd }: { p: Profile; primaryAction: boolean; friendshipStatus?: string; onChat: () => void; onAdd: () => void }) {
   const displayName = p.name || p.username;
   const location = [p.city, p.state].filter(Boolean).join(", ") || p.state || "";
   return (
-    <div className="flex items-center gap-[13px] p-[14px] rounded-[20px] warm-card neo-shadow">
+    <div 
+      onClick={onChat}
+      className="flex items-center gap-[13px] p-[14px] rounded-[20px] warm-card neo-shadow cursor-pointer transition-opacity hover:opacity-90"
+    >
       <UserAvatar id={p.id} name={displayName} online={p.is_online} size={46} />
       <div className="flex-1 min-w-0">
         <p className="text-[14px] font-semibold" style={{ color: "#f5f0ea" }}>
@@ -234,16 +282,24 @@ const PersonCard = memo(function PersonCard({ p, primaryAction, onAction }: { p:
         {location && <p className="text-[12px] mt-0.5" style={{ color: "#6e5e48" }}>{location}</p>}
       </div>
       <button
-        onClick={onAction}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!friendshipStatus) onAdd();
+        }}
+        disabled={!!friendshipStatus}
         className="rounded-[13px] text-[12px]"
         style={{
           padding: "8px 15px",
-          ...(primaryAction
+          ...(primaryAction && !friendshipStatus
             ? { background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410", fontWeight: 700 }
+            : friendshipStatus === "accepted"
+            ? { background: "transparent", color: "#22C55E", fontWeight: 600, border: "0.5px solid #22C55E" }
+            : friendshipStatus === "pending"
+            ? { background: "transparent", color: "#8a7460", fontWeight: 600, border: "0.5px solid #8a7460" }
             : { background: "#2a2318", color: "#f0ebe4", fontWeight: 600, border: "0.5px solid #3e3222" }),
         }}
       >
-        + Add
+        {friendshipStatus === "accepted" ? "Friends" : friendshipStatus === "pending" ? "Pending" : "+ Add"}
       </button>
     </div>
   );

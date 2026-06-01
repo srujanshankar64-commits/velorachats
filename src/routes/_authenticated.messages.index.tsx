@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/messages/")({
 
 type RoomRow = {
   id: string; user_a: string; user_b: string; created_at: string;
-  other?: { id: string; username: string; name: string | null; is_online: boolean };
+  other?: { id: string; username: string; name: string | null; is_online: boolean; age?: number | null };
   last?: { content: string; created_at: string; sender_id: string } | null;
 };
 
@@ -56,7 +56,7 @@ function Messages() {
 
       const otherIds = Array.from(new Set(rows.map((r) => r.user_a === user.id ? r.user_b : r.user_a)));
       const [{ data: profs }, ...lastMsgs] = await Promise.all([
-        supabase.from("profiles").select("id,username,name,is_online").in("id", otherIds),
+        supabase.from("profiles").select("id,username,name,is_online,age").in("id", otherIds),
         ...rows.map((r) => supabase.from("messages").select("content,created_at,sender_id").eq("room_id", r.id).order("created_at", { ascending: false }).limit(1).maybeSingle()),
       ]);
       const profMap = new Map((profs ?? []).map((p) => [p.id, p as RoomRow["other"]]));
@@ -118,6 +118,7 @@ function Messages() {
                 username={r.other.username}
                 name={r.other.name}
                 online={r.other.is_online}
+                age={r.other.age ?? null}
                 last={r.last}
                 unread={unread[r.other.id] ?? 0}
                 myId={user!.id}
@@ -130,10 +131,11 @@ function Messages() {
   );
 }
 
-const ChatRow = memo(function ChatRow({ otherId, username, name, online, last, unread, myId }: {
+const ChatRow = memo(function ChatRow({ otherId, username, name, age, online, last, unread, myId }: {
   otherId: string;
   username: string;
   name: string | null;
+  age: number | null;
   online: boolean;
   last: RoomRow["last"];
   unread: number;
@@ -149,7 +151,10 @@ const ChatRow = memo(function ChatRow({ otherId, username, name, online, last, u
     >
       <UserAvatar id={otherId} name={displayName} online={online} size={46} />
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold truncate" style={{ color: "#f5f0ea" }}>{displayName}</p>
+        <p className="text-[14px] font-semibold truncate" style={{ color: "#f5f0ea" }}>
+          {displayName}
+          {age ? <span className="ml-1.5 text-[13px] font-normal" style={{ color: "#8a7460" }}>· {age}</span> : null}
+        </p>
         <p className="text-[12px] truncate mt-0.5" style={{ color: "#6e5e48" }}>
           {myLast ? "You: " : ""}{last?.content ?? "Say hello 🌙"}
         </p>
