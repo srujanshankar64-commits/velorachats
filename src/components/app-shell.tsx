@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Compass, Users, MessageCircle, Hash, User } from "lucide-react";
 import { useUnread } from "@/lib/unread";
+import { useState, useEffect, useRef } from "react";
 
 const SIDE_ITEMS: ReadonlyArray<{ to: "/discover" | "/friends" | "/messages" | "/rooms" | "/profile"; label: string; icon: typeof Compass; showBadge?: boolean }> = [
   { to: "/discover", label: "Discover", icon: Compass },
@@ -28,6 +29,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const inRandomChat = pathname === "/random";
   const inRoomChat = /^\/rooms\/[^/]+/.test(pathname);
   const hideNav = inDmChat || inRandomChat || inRoomChat;
+
+  const [navVisible, setNavVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollUpAmount = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const diff = currentScrollY - lastScrollY.current;
+      if (diff > 0) {
+        setNavVisible(false);
+        scrollUpAmount.current = 0;
+      } else {
+        scrollUpAmount.current += Math.abs(diff);
+        if (scrollUpAmount.current > 80) setNavVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const isWarmRoute =
     pathname.startsWith("/discover") ||
@@ -90,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!hideNav && (
         <nav
           className="md:hidden fixed bottom-3 left-3 right-3 z-50 bg-[#f5f0ea] border border-[#e8e2d9] rounded-3xl"
-          style={{ paddingTop: 10, paddingBottom: `calc(env(safe-area-inset-bottom) + 16px)` }}
+          style={{ paddingTop: 10, paddingBottom: `calc(env(safe-area-inset-bottom) + 16px)`, transform: navVisible ? "translateY(0)" : "translateY(calc(100% + 16px))", transition: "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}
         >
           <div className="grid grid-cols-5 items-end px-2">
             {NAV_LEFT.map(({ to, label, icon: Icon }) => {
