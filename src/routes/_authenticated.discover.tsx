@@ -24,6 +24,7 @@ type Profile = {
   city: string | null;
   state: string | null;
   is_online: boolean;
+  gender?: string | null;
 };
 
 type Tab = "online" | "all" | "nearby";
@@ -35,6 +36,11 @@ function Discover() {
   const [filter, setFilter] = useState<Tab>("online");
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [meState, setMeState] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [ageMin, setAgeMin] = useState(18);
+  const [ageMax, setAgeMax] = useState(60);
+  const [distFilter, setDistFilter] = useState<"all" | "nearby">("all");
+  const [genderFilter, setGenderFilter] = useState<"all" | "male" | "female">("all");
 
   useEffect(() => {
     if (!user) return;
@@ -49,12 +55,15 @@ function Discover() {
     setProfiles(null);
     let query = supabase
       .from("profiles")
-      .select("id,username,name,age,city,state,is_online")
+      .select("id,username,name,age,city,state,is_online,gender")
       .neq("id", user.id)
       .limit(80);
     if (filter === "online") query = query;
     if (filter === "nearby" && meState) query = query.eq("state", meState);
     if (q.trim()) query = query.ilike("username", `%${q.trim()}%`);
+    if (ageMin > 18 || ageMax < 60) query = query.gte("age", ageMin).lte("age", ageMax);
+    if (distFilter === "nearby" && meState) query = query.eq("state", meState);
+    if (genderFilter !== "all") query = query.eq("gender", genderFilter);
     query.order("is_online", { ascending: false }).order("last_seen", { ascending: false }).then(({ data, error }) => {
       if (!active) return;
       if (error) toast.error(error.message);
@@ -82,7 +91,8 @@ function Discover() {
             className="h-9 w-9 rounded-[12px] flex items-center justify-center"
             style={{ background: "#2e2418", border: "0.5px solid #3a2e1e" }}
             aria-label="Filters"
-          >
+          onClick={() => setShowFilters(true)}
+        >
             <SlidersHorizontal className="h-4 w-4" style={{ color: "#f0ebe4" }} strokeWidth={1.5} />
           </button>
         </div>
@@ -143,6 +153,62 @@ function Discover() {
         )}
       </div>
     </div>
+      {showFilters && (
+        <div className="fixed inset-0 z-[100]" onClick={() => setShowFilters(false)}>
+          <div
+            className="absolute bottom-0 left-0 right-0 rounded-t-[28px] p-6 pb-10"
+            style={{ background: "#1c1610", border: "1px solid #3a2e1e" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center mb-5">
+              <div className="w-10 h-1 rounded-full" style={{ background: "#3a2e1e" }} />
+            </div>
+            <div className="flex items-center justify-between mb-6">
+              <span className="text-[18px] font-bold" style={{ color: "#f5f0ea" }}>Filters</span>
+              <button onClick={() => { setAgeMin(18); setAgeMax(60); setDistFilter("all"); setGenderFilter("all"); }} className="text-[13px]" style={{ color: "#8a7460" }}>Reset</button>
+            </div>
+            <div className="mb-6">
+              <div className="flex justify-between mb-3">
+                <span className="text-[14px] font-semibold" style={{ color: "#f5f0ea" }}>Age Range</span>
+                <span className="text-[13px]" style={{ color: "#8a7460" }}>{ageMin} – {ageMax}</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <input type="range" min={18} max={60} value={ageMin} onChange={(e) => setAgeMin(Math.min(+e.target.value, ageMax - 1))} className="w-full accent-[#f0e8dc]" />
+                <input type="range" min={18} max={60} value={ageMax} onChange={(e) => setAgeMax(Math.max(+e.target.value, ageMin + 1))} className="w-full accent-[#f0e8dc]" />
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-[11px]" style={{ color: "#8a7460" }}>Min: {ageMin}</span>
+                <span className="text-[11px]" style={{ color: "#8a7460" }}>Max: {ageMax}</span>
+              </div>
+            </div>
+            <div className="mb-6">
+              <span className="text-[14px] font-semibold block mb-3" style={{ color: "#f5f0ea" }}>Distance</span>
+              <div className="flex gap-2">
+                {(["all", "nearby"] as const).map((d) => (
+                  <button key={d} onClick={() => setDistFilter(d)} className="flex-1 py-2 rounded-[12px] text-[13px] font-medium"
+                    style={{ background: distFilter === d ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a231a", color: distFilter === d ? "#1a1410" : "#8a7460", border: distFilter === d ? "none" : "0.5px solid #3a2e1e" }}>
+                    {d === "all" ? "Everyone" : "Nearby"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-7">
+              <span className="text-[14px] font-semibold block mb-3" style={{ color: "#f5f0ea" }}>Gender</span>
+              <div className="flex gap-2">
+                {(["all", "male", "female"] as const).map((g) => (
+                  <button key={g} onClick={() => setGenderFilter(g)} className="flex-1 py-2 rounded-[12px] text-[13px] font-medium"
+                    style={{ background: genderFilter === g ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a231a", color: genderFilter === g ? "#1a1410" : "#8a7460", border: genderFilter === g ? "none" : "0.5px solid #3a2e1e" }}>
+                    {g === "all" ? "All" : g === "male" ? "Male" : "Female"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => setShowFilters(false)} className="w-full py-3 rounded-[16px] text-[15px] font-bold" style={{ background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410" }}>
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      )}
   );
 }
 
