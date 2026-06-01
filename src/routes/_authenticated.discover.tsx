@@ -39,7 +39,6 @@ function Discover() {
   const [showFilters, setShowFilters] = useState(false);
   const [ageMin, setAgeMin] = useState(18);
   const [ageMax, setAgeMax] = useState(60);
-  const [distFilter, setDistFilter] = useState<"all" | "nearby">("all");
   const [genderFilter, setGenderFilter] = useState<"all" | "male" | "female">("all");
 
   useEffect(() => {
@@ -62,7 +61,6 @@ function Discover() {
     if (filter === "nearby" && meState) query = query.eq("state", meState);
     if (q.trim()) query = query.ilike("username", `%${q.trim()}%`);
     if (ageMin > 18 || ageMax < 60) query = query.gte("age", ageMin).lte("age", ageMax);
-    if (distFilter === "nearby" && meState) query = query.eq("state", meState);
     if (genderFilter !== "all") query = query.eq("gender", genderFilter);
     query.order("is_online", { ascending: false }).order("last_seen", { ascending: false }).then(({ data, error }) => {
       if (!active) return;
@@ -179,17 +177,6 @@ function Discover() {
               <div className="flex justify-between mt-1">
                 <span className="text-[11px]" style={{ color: "#8a7460" }}>Min: {ageMin}</span>
                 <span className="text-[11px]" style={{ color: "#8a7460" }}>Max: {ageMax}</span>
-              </div>
-            </div>
-            <div className="mb-6">
-              <span className="text-[14px] font-semibold block mb-3" style={{ color: "#f5f0ea" }}>Distance</span>
-              <div className="flex gap-2">
-                {(["all", "nearby"] as const).map((d) => (
-                  <button key={d} onClick={() => setDistFilter(d)} className="flex-1 py-2 rounded-[12px] text-[13px] font-medium"
-                    style={{ background: distFilter === d ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a231a", color: distFilter === d ? "#1a1410" : "#8a7460", border: distFilter === d ? "none" : "0.5px solid #3a2e1e" }}>
-                    {d === "all" ? "Everyone" : "Nearby"}
-                  </button>
-                ))}
               </div>
             </div>
             <div className="mb-7">
