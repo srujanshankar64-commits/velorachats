@@ -57,7 +57,6 @@ function Discover() {
       .select("id,username,name,age,city,state,is_online,gender")
       .neq("id", user.id)
       .limit(80);
-    if (filter === "online") query = query;
     if (filter === "nearby" && meState) query = query.eq("state", meState);
     if (q.trim()) query = query.ilike("username", `%${q.trim()}%`);
     if (ageMin > 18 || ageMax < 60) query = query.gte("age", ageMin).lte("age", ageMax);
@@ -68,7 +67,7 @@ function Discover() {
       setProfiles((data ?? []) as Profile[]);
     });
     return () => { active = false; };
-  }, [user, filter, q, meState]);
+  }, [user, filter, q, meState, ageMin, ageMax, genderFilter]);
 
   const list = useMemo(() => profiles ?? [], [profiles]);
   const onlineCount = useMemo(() => list.filter((p) => p.is_online).length, [list]);
@@ -89,8 +88,8 @@ function Discover() {
             className="h-9 w-9 rounded-[12px] flex items-center justify-center"
             style={{ background: "#2e2418", border: "0.5px solid #3a2e1e" }}
             aria-label="Filters"
-          onClick={() => setShowFilters(true)}
-        >
+            onClick={() => setShowFilters(true)}
+          >
             <SlidersHorizontal className="h-4 w-4" style={{ color: "#f0ebe4" }} strokeWidth={1.5} />
           </button>
         </div>
@@ -150,7 +149,8 @@ function Discover() {
           </div>
         )}
       </div>
-    </div>
+
+      {/* Filters modal */}
       {showFilters && (
         <div className="fixed inset-0 z-[100]" onClick={() => setShowFilters(false)}>
           <div
@@ -163,7 +163,13 @@ function Discover() {
             </div>
             <div className="flex items-center justify-between mb-6">
               <span className="text-[18px] font-bold" style={{ color: "#f5f0ea" }}>Filters</span>
-              <button onClick={() => { setAgeMin(18); setAgeMax(60); setDistFilter("all"); setGenderFilter("all"); }} className="text-[13px]" style={{ color: "#8a7460" }}>Reset</button>
+              <button
+                onClick={() => { setAgeMin(18); setAgeMax(60); setGenderFilter("all"); }}
+                className="text-[13px]"
+                style={{ color: "#8a7460" }}
+              >
+                Reset
+              </button>
             </div>
             <div className="mb-6">
               <div className="flex justify-between mb-3">
@@ -183,19 +189,32 @@ function Discover() {
               <span className="text-[14px] font-semibold block mb-3" style={{ color: "#f5f0ea" }}>Gender</span>
               <div className="flex gap-2">
                 {(["all", "male", "female"] as const).map((g) => (
-                  <button key={g} onClick={() => setGenderFilter(g)} className="flex-1 py-2 rounded-[12px] text-[13px] font-medium"
-                    style={{ background: genderFilter === g ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a231a", color: genderFilter === g ? "#1a1410" : "#8a7460", border: genderFilter === g ? "none" : "0.5px solid #3a2e1e" }}>
+                  <button
+                    key={g}
+                    onClick={() => setGenderFilter(g)}
+                    className="flex-1 py-2 rounded-[12px] text-[13px] font-medium"
+                    style={{
+                      background: genderFilter === g ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a231a",
+                      color: genderFilter === g ? "#1a1410" : "#8a7460",
+                      border: genderFilter === g ? "none" : "0.5px solid #3a2e1e",
+                    }}
+                  >
                     {g === "all" ? "All" : g === "male" ? "Male" : "Female"}
                   </button>
                 ))}
               </div>
             </div>
-            <button onClick={() => setShowFilters(false)} className="w-full py-3 rounded-[16px] text-[15px] font-bold" style={{ background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410" }}>
+            <button
+              onClick={() => setShowFilters(false)}
+              className="w-full py-3 rounded-[16px] text-[15px] font-bold"
+              style={{ background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410" }}
+            >
               Apply Filters
             </button>
           </div>
         </div>
       )}
+    </div>
   );
 }
 
