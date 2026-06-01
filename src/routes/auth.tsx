@@ -15,14 +15,68 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-const STATES = [
-  "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
-  "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
-  "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
-  "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
-  "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+const COUNTRIES = [
+  "Afghanistan", "Albania", "Algeria", "Argentina", "Australia", "Austria",
+  "Bangladesh", "Belgium", "Brazil", "Canada", "Chile", "China", "Colombia",
+  "Croatia", "Czech Republic", "Denmark", "Egypt", "Ethiopia", "Finland",
+  "France", "Germany", "Ghana", "Greece", "Hungary", "India", "Indonesia",
+  "Iran", "Iraq", "Ireland", "Israel", "Italy", "Japan", "Jordan", "Kenya",
+  "Malaysia", "Mexico", "Morocco", "Nepal", "Netherlands", "New Zealand",
+  "Nigeria", "Norway", "Pakistan", "Peru", "Philippines", "Poland", "Portugal",
+  "Romania", "Russia", "Saudi Arabia", "South Africa", "South Korea", "Spain",
+  "Sri Lanka", "Sweden", "Switzerland", "Thailand", "Turkey", "Ukraine",
+  "United Arab Emirates", "United Kingdom", "United States", "Vietnam",
 ];
+
+const STATES_BY_COUNTRY: Record<string, string[]> = {
+  "India": [
+    "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
+    "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
+    "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
+    "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
+    "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+  ],
+  "United States": [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
+    "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
+    "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
+    "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
+    "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
+    "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+    "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
+    "Wisconsin", "Wyoming"
+  ],
+  "Australia": [
+    "Australian Capital Territory", "New South Wales", "Northern Territory", "Queensland",
+    "South Australia", "Tasmania", "Victoria", "Western Australia"
+  ],
+  "Canada": [
+    "Alberta", "British Columbia", "Manitoba", "New Brunswick",
+    "Newfoundland and Labrador", "Nova Scotia", "Ontario",
+    "Prince Edward Island", "Quebec", "Saskatchewan"
+  ],
+  "United Kingdom": [
+    "England", "Northern Ireland", "Scotland", "Wales"
+  ],
+  "Germany": [
+    "Baden-Württemberg", "Bavaria", "Berlin", "Brandenburg", "Bremen", "Hamburg",
+    "Hesse", "Lower Saxony", "Mecklenburg-Vorpommern", "North Rhine-Westphalia",
+    "Rhineland-Palatinate", "Saarland", "Saxony", "Saxony-Anhalt",
+    "Schleswig-Holstein", "Thuringia"
+  ],
+  "Pakistan": [
+    "Azad Kashmir", "Balochistan", "Gilgit-Baltistan", "Khyber Pakhtunkhwa",
+    "Punjab", "Sindh"
+  ],
+  "Brazil": [
+    "Acre", "Alagoas", "Amapá", "Amazonas", "Bahia", "Ceará", "Espírito Santo",
+    "Goiás", "Maranhão", "Mato Grosso", "Mato Grosso do Sul", "Minas Gerais",
+    "Pará", "Paraíba", "Paraná", "Pernambuco", "Piauí", "Rio de Janeiro",
+    "Rio Grande do Norte", "Rio Grande do Sul", "Rondônia", "Roraima",
+    "Santa Catarina", "São Paulo", "Sergipe", "Tocantins"
+  ],
+};
 
 function AuthPage() {
   const nav = useNavigate();
@@ -34,10 +88,27 @@ function AuthPage() {
   const [username, setUsername] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "other">("other");
-  const [city, setCity] = useState("");
   const [stateField, setStateField] = useState("");
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Country autocomplete
+  const [countryInput, setCountryInput] = useState("");
+  const [countrySelected, setCountrySelected] = useState("");
+  const [showCountrySugg, setShowCountrySugg] = useState(false);
+
+  // State autocomplete
+  const [stateInput, setStateInput] = useState("");
+  const [showStateSugg, setShowStateSugg] = useState(false);
+
+  const filteredCountries = COUNTRIES.filter(c =>
+    c.toLowerCase().includes(countryInput.toLowerCase()) && countryInput.length > 0
+  ).slice(0, 6);
+
+  const availableStates = STATES_BY_COUNTRY[countrySelected] || [];
+  const filteredStates = availableStates.filter(s =>
+    s.toLowerCase().includes(stateInput.toLowerCase()) && stateInput.length > 0
+  ).slice(0, 6);
 
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
@@ -55,7 +126,6 @@ function AuthPage() {
     }
   }, []);
 
-  // Username validation check
   useEffect(() => {
     const checkUsername = async () => {
       const u = username.trim().toLowerCase();
@@ -99,7 +169,7 @@ function AuthPage() {
             name: username.trim(),
             age: ageNum?.toString() ?? "",
             gender,
-            city: city.trim() || null,
+            country: countrySelected || null,
             state: stateField.trim() || null,
           },
         },
@@ -134,7 +204,7 @@ function AuthPage() {
               name: username.trim(),
               age: ageNum?.toString() ?? "",
               gender,
-              city: city.trim() || null,
+              country: countrySelected || null,
               state: stateField.trim() || null,
             },
           },
@@ -152,6 +222,84 @@ function AuthPage() {
       setBusy(false);
     }
   }
+
+  // Reusable country+state fields
+  const locationFields = (
+    <div className="grid grid-cols-2 gap-2">
+      {/* Country autocomplete */}
+      <div className="relative">
+        <input
+          value={countryInput}
+          onChange={(e) => {
+            setCountryInput(e.target.value);
+            setCountrySelected("");
+            setStateField("");
+            setStateInput("");
+            setShowCountrySugg(true);
+          }}
+          onFocus={() => setShowCountrySugg(true)}
+          onBlur={() => setTimeout(() => setShowCountrySugg(false), 150)}
+          placeholder="Country"
+          required
+          className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666] text-white"
+        />
+        {showCountrySugg && filteredCountries.length > 0 && (
+          <ul className="absolute z-50 top-13 left-0 right-0 bg-[#2a2a2e] rounded-2xl overflow-hidden shadow-lg mt-1">
+            {filteredCountries.map((c) => (
+              <li
+                key={c}
+                onMouseDown={() => {
+                  setCountryInput(c);
+                  setCountrySelected(c);
+                  setShowCountrySugg(false);
+                  setStateField("");
+                  setStateInput("");
+                }}
+                className="px-4 py-2.5 text-sm text-white hover:bg-[#7C3AED] cursor-pointer"
+              >
+                {c}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* State autocomplete */}
+      <div className="relative">
+        <input
+          value={stateInput}
+          onChange={(e) => {
+            setStateInput(e.target.value);
+            setStateField(e.target.value);
+            setShowStateSugg(true);
+          }}
+          onFocus={() => setShowStateSugg(true)}
+          onBlur={() => setTimeout(() => setShowStateSugg(false), 150)}
+          placeholder={countrySelected ? "State" : "Select country first"}
+          required
+          disabled={!countrySelected}
+          className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666] text-white disabled:opacity-40"
+        />
+        {showStateSugg && filteredStates.length > 0 && (
+          <ul className="absolute z-50 top-13 left-0 right-0 bg-[#2a2a2e] rounded-2xl overflow-hidden shadow-lg mt-1">
+            {filteredStates.map((s) => (
+              <li
+                key={s}
+                onMouseDown={() => {
+                  setStateInput(s);
+                  setStateField(s);
+                  setShowStateSugg(false);
+                }}
+                className="px-4 py-2.5 text-sm text-white hover:bg-[#7C3AED] cursor-pointer"
+              >
+                {s}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-[100dvh] bg-black text-white flex flex-col">
@@ -221,26 +369,7 @@ function AuthPage() {
                     <option value="female">Female</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={stateField}
-                    onChange={(e) => setStateField(e.target.value)}
-                    required
-                    className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm text-[#888]"
-                  >
-                    <option value="">Select State</option>
-                    {STATES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  <input
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="City"
-                    required
-                    className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]"
-                  />
-                </div>
+                {locationFields}
                 <button
                   type="submit"
                   disabled={busy || usernameAvailable === false || usernameChecking}
@@ -299,26 +428,7 @@ function AuthPage() {
                         <option value="female">Female</option>
                       </select>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <select
-                        value={stateField}
-                        onChange={(e) => setStateField(e.target.value)}
-                        required
-                        className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm text-[#888]"
-                      >
-                        <option value="">Select State</option>
-                        {STATES.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                      <input
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        placeholder="City"
-                        required
-                        className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]"
-                      />
-                    </div>
+                    {locationFields}
                   </>
                 )}
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
