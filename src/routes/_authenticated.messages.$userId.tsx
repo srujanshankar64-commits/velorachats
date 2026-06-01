@@ -64,6 +64,7 @@ function DMChat() {
     return () => { document.title = "ShhChats"; };
   }, [unreadTotal]);
 
+  // Initial load
   useEffect(() => {
     if (!user) return;
     let active = true;
@@ -87,6 +88,7 @@ function DMChat() {
       if (msgs) setMessages(msgs as Msg[]);
       markRead(userId);
 
+      // Mark all received messages as read
       await supabase
         .from("messages")
         .update({ read_at: new Date().toISOString() })
@@ -97,9 +99,12 @@ function DMChat() {
     return () => { active = false; };
   }, [userId, user, markRead]);
 
+  // Real-time: messages + typing + online status
   useEffect(() => {
     if (!roomId || !user) return;
-    const ch = supabase
+
+    // Message channel
+    const msgCh = supabase
       .channel(`room:${roomId}`, { config: { broadcast: { self: false } } })
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
@@ -117,7 +122,10 @@ function DMChat() {
           });
           if (m.sender_id !== user.id) {
             markRead(userId);
-            supabase.from("messages").update({ read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
+            supabase.from("messages")
+              .update({ read_at: new Date().toISOString() })
+              .eq("id", m.id)
+              .then(() => {});
           }
         })
       .on("postgres_changes",
@@ -134,10 +142,44 @@ function DMChat() {
         }
       })
       .subscribe();
-    typingChRef.current = ch;
-    return () => { ch.unsubscribe(); typingChRef.current = null; };
+
+    typingChRef.current = msgCh;
+
+    // Online status: live subscription on profiles table
+    const onlineCh = supabase
+      .channel(`presence:${userId}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+        (payload) => {
+          const updated = payload.new as { is_online: boolean };
+          setOther((prev) => prev ? { ...prev, is_online: updated.is_online } : prev);
+        })
+      .subscribe();
+
+    // Mark user as online
+    if (user) {
+      supabase.from("profiles").update({ is_online: true, last_seen: new Date().toISOString() }).eq("id", user.id).then(() => {});
+    }
+
+    // Mark offline on tab close
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        supabase.from("profiles").update({ is_online: false, last_seen: new Date().toISOString() }).eq("id", user.id).then(() => {});
+      } else {
+        supabase.from("profiles").update({ is_online: true }).eq("id", user.id).then(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      msgCh.unsubscribe();
+      onlineCh.unsubscribe();
+      typingChRef.current = null;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [roomId, user, userId, markRead]);
 
+  // Auto scroll to bottom
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -148,6 +190,7 @@ function DMChat() {
     if (!ch || !user) return;
     ch.send({ type: "broadcast", event: "typing", payload: { from: user.id, typing } });
   }
+
   function onInputChange(v: string) {
     setInput(v);
     broadcastTyping(true);
@@ -169,10 +212,18 @@ function DMChat() {
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    const { error } = await supabase.from("messages").insert({ room_id: roomId, sender_id: user.id, content: text });
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({ room_id: roomId, sender_id: user.id, content: text })
+      .select("id,sender_id,content,created_at,read_at,delivered_at,status")
+      .single();
+
     if (error) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)));
       toast.error("Couldn't send");
+    } else if (data) {
+      // Replace optimistic message with real one immediately
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? (data as Msg) : m)));
     }
   }
 
@@ -183,6 +234,7 @@ function DMChat() {
     setMenuOpen(false);
     goBack();
   }
+
   async function reportUser(reason: string) {
     if (!user) return;
     await supabase.from("reports").insert({ reporter_id: user.id, reported_id: userId, reason });
@@ -197,8 +249,10 @@ function DMChat() {
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
-  const myLastMessageAt = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender_id === user?.id) return messages[i].created_at;
+  const myLastSentId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].sender_id === user?.id && !messages[i]._local) return messages[i].id;
+    }
     return null;
   }, [messages, user?.id]);
 
@@ -217,9 +271,11 @@ function DMChat() {
         {other && (
           <div className="flex-1 min-w-0 flex items-center gap-2.5">
             <UserAvatar id={other.id} name={displayName} online={other.is_online} size={36} onlineRingColor="#1a1512" />
-            <div className="min-w-0 flex items-center gap-1.5">
+            <div className="min-w-0 flex flex-col">
               <p className="text-[16px] font-semibold truncate warm-grad-text leading-tight">{displayName}</p>
-              {other.is_online && <span className="h-2 w-2 rounded-full" style={{ background: "#6dbf6a" }} />}
+              <p className="text-[11px]" style={{ color: other.is_online ? "#6dbf6a" : "#5e5040" }}>
+                {other.is_online ? "Online" : "Offline"}
+              </p>
             </div>
           </div>
         )}
@@ -239,7 +295,7 @@ function DMChat() {
           </span>
         </div>
         {messages.map((m) => (
-          <Bubble key={m.id} m={m} mine={m.sender_id === user!.id} myLastAt={myLastMessageAt} />
+          <Bubble key={m.id} m={m} mine={m.sender_id === user!.id} myLastSentId={myLastSentId} />
         ))}
         {crisis && (
           <div className="text-center my-3">
@@ -321,11 +377,13 @@ function DMChat() {
   );
 }
 
-const Bubble = memo(function Bubble({ m, mine, myLastAt }: { m: Msg; mine: boolean; myLastAt: string | null }) {
-  const isMyLast = mine && myLastAt === m.created_at;
+const Bubble = memo(function Bubble({ m, mine, myLastSentId }: { m: Msg; mine: boolean; myLastSentId: string | null }) {
+  const isMyLast = mine && myLastSentId === m.id;
   const failed = m.status === "failed";
   const sending = m._local && m.status === "sending";
   const seen = !!m.read_at;
+  const delivered = !!m.delivered_at;
+
   return (
     <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[75%]">
@@ -343,11 +401,12 @@ const Bubble = memo(function Bubble({ m, mine, myLastAt }: { m: Msg; mine: boole
         </div>
         <div className={`mt-0.5 flex items-center gap-1 text-[10px] ${mine ? "justify-end" : "justify-start"}`} style={{ color: "#5e5040" }}>
           <span>{fmtTime(m.created_at)}</span>
-          {mine && (
+          {mine && isMyLast && (
             failed ? <span style={{ color: "#F87171" }}>failed</span>
-            : sending ? <span>…</span>
-            : isMyLast && seen ? <span style={{ color: "#8a7460" }}>seen</span>
-            : null
+            : sending ? <span style={{ color: "#5e5040" }}>sending…</span>
+            : seen ? <span style={{ color: "#6dbf6a" }}>✓✓ seen</span>
+            : delivered ? <span style={{ color: "#8a7460" }}>✓✓ delivered</span>
+            : <span style={{ color: "#8a7460" }}>✓ sent</span>
           )}
         </div>
       </div>
