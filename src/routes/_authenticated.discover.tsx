@@ -24,7 +24,6 @@ type Profile = {
   city: string | null;
   state: string | null;
   is_online: boolean;
-  last_seen: string | null;
 };
 
 type Tab = "online" | "all" | "nearby";
@@ -34,107 +33,38 @@ function Discover() {
   const nav = useNavigate();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Tab>("online");
-  // allUsers holds the full unfiltered list from DB — filtering is done client-side
-  const [allUsers, setAllUsers] = useState<Profile[] | null>(null);
+  const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [meState, setMeState] = useState<string | null>(null);
 
-  // Fetch current user's state once
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("profiles")
-      .select("state")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        setMeState((data as { state?: string | null } | null)?.state ?? null);
-      });
+    supabase.from("profiles").select("state").eq("id", user.id).single().then(({ data }) => {
+      setMeState((data as { state?: string | null } | null)?.state ?? null);
+    });
   }, [user]);
 
-  // Fetch ALL other users once (no server-side filter by tab)
   useEffect(() => {
     if (!user) return;
     let active = true;
-    setAllUsers(null);
-    supabase
+    setProfiles(null);
+    let query = supabase
       .from("profiles")
-      .select("id,username,name,age,city,state,is_online,last_seen")
+      .select("id,username,name,age,city,state,is_online")
       .neq("id", user.id)
-      .order("is_online", { ascending: false })
-      .order("last_seen", { ascending: false })
-      .limit(200)
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) toast.error(error.message);
-        setAllUsers((data ?? []) as Profile[]);
-      });
+      .limit(80);
+    if (filter === "online") query = query.eq("is_online", true);
+    if (filter === "nearby" && meState) query = query.eq("state", meState);
+    if (q.trim()) query = query.ilike("username", `%${q.trim()}%`);
+    query.order("is_online", { ascending: false }).order("last_seen", { ascending: false }).then(({ data, error }) => {
+      if (!active) return;
+      if (error) toast.error(error.message);
+      setProfiles((data ?? []) as Profile[]);
+    });
     return () => { active = false; };
-  }, [user]);
+  }, [user, filter, q, meState]);
 
-  // Realtime subscription — update individual users in allUsers when their presence changes
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel("discover-presence-live")
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles" },
-        (payload) => {
-          const updated = payload.new as Profile;
-          setAllUsers((prev) => {
-            if (!prev) return prev;
-            // If this user isn't in our list yet, ignore
-            const exists = prev.some((u) => u.id === updated.id);
-            if (!exists) return prev;
-            return prev.map((u) => u.id === updated.id ? { ...u, ...updated } : u);
-          });
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
-
-  // Client-side filtering by tab + search query
-  const list = useMemo(() => {
-    if (!allUsers) return null;
-    let result = allUsers;
-
-    // Apply tab filter
-    if (filter === "online") {
-      result = result.filter((u) => u.is_online === true);
-    } else if (filter === "nearby") {
-      if (!meState) return [];
-      const myState = meState.toLowerCase().trim();
-      result = result.filter((u) => u.state?.toLowerCase().trim() === myState);
-      // For nearby: online first, then offline, both by last_seen desc
-      result = [...result].sort((a, b) => {
-        if (a.is_online && !b.is_online) return -1;
-        if (!a.is_online && b.is_online) return 1;
-        return new Date(b.last_seen ?? 0).getTime() - new Date(a.last_seen ?? 0).getTime();
-      });
-    } else {
-      // Everyone: online first then offline, both by last_seen desc
-      result = [...result].sort((a, b) => {
-        if (a.is_online && !b.is_online) return -1;
-        if (!a.is_online && b.is_online) return 1;
-        return new Date(b.last_seen ?? 0).getTime() - new Date(a.last_seen ?? 0).getTime();
-      });
-    }
-
-    // Apply search query
-    if (q.trim()) {
-      const lq = q.trim().toLowerCase();
-      result = result.filter(
-        (u) =>
-          u.username?.toLowerCase().includes(lq) ||
-          u.name?.toLowerCase().includes(lq)
-      );
-    }
-
-    return result;
-  }, [allUsers, filter, q, meState]);
-
-  const onlineCount = useMemo(() => (allUsers ?? []).filter((p) => p.is_online).length, [allUsers]);
+  const list = useMemo(() => profiles ?? [], [profiles]);
+  const onlineCount = useMemo(() => list.filter((p) => p.is_online).length, [list]);
 
   async function openDM(targetId: string) {
     const { error } = await supabase.rpc("get_or_create_dm", { target: targetId });
@@ -193,20 +123,16 @@ function Discover() {
 
         {/* Section label */}
         <p className="warm-section-label mb-2 px-1">
-          {filter === "online" ? "Active now" : filter === "nearby" ? "Near you" : "Everyone"} · {allUsers ? `${filter === "online" ? onlineCount : (list?.length ?? 0)} people` : "loading…"}
+          {filter === "online" ? "Active now" : filter === "nearby" ? "Near you" : "Everyone"} · {profiles ? `${filter === "online" ? onlineCount : list.length} people` : "loading…"}
         </p>
 
-        {allUsers === null ? (
+        {profiles === null ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-[78px] rounded-[20px] warm-card neo-shimmer" />
             ))}
           </div>
-        ) : filter === "nearby" && !meState ? (
-          <p className="text-center text-sm py-12" style={{ color: "#6e5e48" }}>
-            Set your state in your profile to see nearby people.
-          </p>
-        ) : !list || list.length === 0 ? (
+        ) : list.length === 0 ? (
           <p className="text-center text-sm py-12" style={{ color: "#6e5e48" }}>No one here right now.</p>
         ) : (
           <div className="flex flex-col gap-2">

@@ -1,254 +1,111 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Users, UserCheck, UserPlus, MessageCircle, Heart } from "lucide-react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { UserAvatar } from "@/components/user-avatar";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/friends")({
-  head: () => ({ meta: [{ title: "Friends — ShhChats" }] }),
-  component: FriendsPage,
+  head: () => ({
+    meta: [
+      { title: "Friends — ShhChats" },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
+  component: Friends,
 });
 
-type FriendRow = {
-  id: string; // friendship ID
-  status: string;
-  isRequester: boolean;
-  friend: {
-    id: string;
-    username: string;
-    avatar_url: string | null;
-    age: number | null;
-    state: string | null;
-    is_online: boolean;
-    last_seen_at: string | null;
-  };
+type Friend = {
+  id: string;
+  username: string;
+  name: string | null;
+  city: string | null;
+  state: string | null;
+  is_online: boolean;
 };
 
-function FriendsPage() {
+function Friends() {
   const { user } = useAuth();
   const nav = useNavigate();
-  const [friends, setFriends] = useState<FriendRow[]>([]);
-  const [requests, setRequests] = useState<FriendRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchFriendsData = async () => {
-    if (!user) return;
-    setLoading(true);
-    
-    const { data: friendships, error } = await supabase
-      .from("friendships")
-      .select("*")
-      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
-
-    if (error) {
-      toast.error(error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!friendships || friendships.length === 0) {
-      setFriends([]);
-      setRequests([]);
-      setLoading(false);
-      return;
-    }
-
-    // Extract other user ids
-    const otherIds = friendships.map((f) =>
-      f.requester_id === user.id ? f.addressee_id : f.requester_id
-    );
-
-    const { data: profiles, error: profError } = await supabase
-      .from("profiles")
-      .select("id,username,avatar_url,age,state,is_online,last_seen_at")
-      .in("id", otherIds);
-
-    if (profError) {
-      toast.error(profError.message);
-      setLoading(false);
-      return;
-    }
-
-    const profileMap = new Map(profiles.map((p) => [p.id, p]));
-    
-    const resolvedFriends: FriendRow[] = [];
-    const resolvedRequests: FriendRow[] = [];
-
-    friendships.forEach((f) => {
-      const otherId = f.requester_id === user.id ? f.addressee_id : f.requester_id;
-      const profile = profileMap.get(otherId);
-      if (!profile) return;
-
-      const row: FriendRow = {
-        id: f.id,
-        status: f.status,
-        isRequester: f.requester_id === user.id,
-        friend: profile as any,
-      };
-
-      if (f.status === "accepted") {
-        resolvedFriends.push(row);
-      } else if (f.status === "pending") {
-        resolvedRequests.push(row);
-      }
-    });
-
-    setFriends(resolvedFriends);
-    setRequests(resolvedRequests);
-    setLoading(false);
-  };
+  const [friends, setFriends] = useState<Friend[] | null>(null);
 
   useEffect(() => {
-    fetchFriendsData();
+    if (!user) return;
+    let active = true;
+    (async () => {
+      const { data: rels } = await supabase
+        .from("friendships")
+        .select("requester_id,addressee_id")
+        .eq("status", "accepted")
+        .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
+        .limit(80);
+
+      if (!active) return;
+      const ids = (rels ?? []).map((r) => (r.requester_id === user.id ? r.addressee_id : r.requester_id));
+      if (ids.length === 0) { setFriends([]); return; }
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id,username,name,city,state,is_online")
+        .in("id", ids);
+      if (!active) return;
+      setFriends((profs ?? []) as Friend[]);
+    })();
+    return () => { active = false; };
   }, [user]);
 
-  const acceptRequest = async (id: string) => {
-    const { error } = await supabase
-      .from("friendships")
-      .update({ status: "accepted" })
-      .eq("id", id);
-
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    toast.success("Friend request accepted!");
-    fetchFriendsData();
-  };
-
-  const rejectRequest = async (id: string) => {
-    const { error } = await supabase.from("friendships").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    toast.success("Request removed.");
-    fetchFriendsData();
-  };
-
-  const openChat = async (targetId: string) => {
+  async function openDM(targetId: string) {
     const { error } = await supabase.rpc("get_or_create_dm", { target: targetId });
     if (error) return toast.error(error.message);
     nav({ to: "/messages/$userId", params: { userId: targetId } });
-  };
+  }
 
-  const getIsOnline = (friend: FriendRow["friend"]) => {
-    if (!friend.is_online || !friend.last_seen_at) return false;
-    return Date.now() - new Date(friend.last_seen_at).getTime() < 60000;
-  };
+  const list = useMemo(() => friends ?? [], [friends]);
 
   return (
-    <div className="min-h-[100dvh] bg-black text-white">
-      <div className="max-w-2xl mx-auto px-4 pt-5 pb-8">
-        <h1 className="text-[20px] mb-6 flex items-center gap-2">
-          <Users className="h-5 w-5 text-[#8AB4F8]" /> Friends
-        </h1>
+    <div className="min-h-[100dvh] warm-page">
+      <div className="max-w-2xl mx-auto px-4 pt-5 pb-6">
+        <h1 className="text-[28px] font-bold warm-grad-text leading-none mb-5">Friends</h1>
 
-        {loading ? (
-          <div className="space-y-3">
+        {friends === null ? (
+          <div className="space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-16 rounded-2xl bg-[#0d0d0e] animate-pulse" />
+              <div key={i} className="h-[78px] rounded-[20px] warm-card neo-shimmer" />
             ))}
           </div>
+        ) : list.length === 0 ? (
+          <div className="text-center py-16" style={{ color: "#6e5e48" }}>
+            <p className="text-sm">No friends yet.</p>
+            <p className="text-[12px] mt-1">Add people from Discover to see them here.</p>
+          </div>
         ) : (
-          <div className="space-y-6">
-            {/* Friend Requests Section */}
-            {requests.length > 0 && (
-              <div className="space-y-2">
-                <h2 className="text-xs text-[#888] font-semibold uppercase tracking-wider px-2">
-                  Friend Requests ({requests.length})
-                </h2>
-                <div className="flex flex-col gap-1 bg-[#1A1A1F] rounded-2xl p-2 border border-white/5">
-                  {requests.map((r) => (
-                    <div key={r.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-white/5">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-[#7C3AED] flex items-center justify-center font-semibold">
-                          {r.friend.username[0]?.toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{r.friend.username}</p>
-                          <p className="text-xs text-[#888]">
-                            {r.friend.age ? `${r.friend.age} y/o` : ""} {r.friend.state ? `· ${r.friend.state}` : ""}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {r.isRequester ? (
-                          <button onClick={() => rejectRequest(r.id)} className="px-3 h-8 text-xs rounded-full bg-white/10 hover:bg-white/20">
-                            Cancel
-                          </button>
-                        ) : (
-                          <>
-                            <button onClick={() => acceptRequest(r.id)} className="px-3 h-8 text-xs rounded-full bg-[#7C3AED] hover:bg-[#8B5CF6] text-white">
-                              Accept
-                            </button>
-                            <button onClick={() => rejectRequest(r.id)} className="px-3 h-8 text-xs rounded-full bg-white/10 hover:bg-white/20">
-                              Ignore
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Friends List Section */}
-            <div className="space-y-2">
-              <h2 className="text-xs text-[#888] font-semibold uppercase tracking-wider px-2">
-                All Friends ({friends.length})
-              </h2>
-              {friends.length === 0 ? (
-                <div className="text-center py-12 bg-[#1A1A1F] rounded-2xl border border-white/5">
-                  <UserPlus className="h-8 w-8 mx-auto text-[#444] mb-2" />
-                  <p className="text-sm text-[#888]">No friends added yet</p>
-                  <button onClick={() => nav({ to: "/discover" })} className="mt-4 px-4 h-9 rounded-full bg-[#7C3AED] text-xs text-white">
-                    Find Friends
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-1 bg-[#1A1A1F] rounded-2xl p-2 border border-white/5">
-                  {friends.map((f) => {
-                    const online = getIsOnline(f.friend);
-                    return (
-                      <div key={f.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-white/5">
-                        <div className="flex items-center gap-3">
-                          <div className="relative">
-                            <div className="h-10 w-10 rounded-full bg-[#7C3AED] flex items-center justify-center font-semibold">
-                              {f.friend.username[0]?.toUpperCase()}
-                            </div>
-                            {online && (
-                              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-[#22C55E] ring-2 ring-[#1A1A1F]" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{f.friend.username}</p>
-                            <p className="text-xs text-[#888]">
-                              {f.friend.age ? `${f.friend.age} y/o` : ""} {f.friend.state ? `· ${f.friend.state}` : ""}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => openChat(f.friend.id)} className="h-8 w-8 rounded-full bg-[#7C3AED]/20 hover:bg-[#7C3AED]/30 flex items-center justify-center text-[#8AB4F8]" title="Message">
-                            <MessageCircle className="h-4 w-4" />
-                          </button>
-                          <button onClick={() => rejectRequest(f.id)} className="px-3 h-8 text-xs rounded-full bg-red-900/20 hover:bg-red-950/40 text-red-400">
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+          <div className="flex flex-col gap-2">
+            {list.map((f) => (
+              <FriendCard key={f.id} f={f} onMessage={() => openDM(f.id)} />
+            ))}
           </div>
         )}
       </div>
     </div>
   );
 }
+
+const FriendCard = memo(function FriendCard({ f, onMessage }: { f: Friend; onMessage: () => void }) {
+  const displayName = f.name || f.username;
+  const location = [f.city, f.state].filter(Boolean).join(", ") || f.state || "";
+  return (
+    <div className="flex items-center gap-[13px] p-[14px] rounded-[20px] warm-card neo-shadow">
+      <UserAvatar id={f.id} name={displayName} online={f.is_online} size={46} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] font-semibold" style={{ color: "#f5f0ea" }}>{displayName}</p>
+        {location && <p className="text-[12px] mt-0.5" style={{ color: "#6e5e48" }}>{location}</p>}
+      </div>
+      <button
+        onClick={onMessage}
+        className="rounded-[13px] text-[12px] font-semibold"
+        style={{ padding: "8px 15px", background: "#2a2318", color: "#f0ebe4", border: "0.5px solid #3e3222" }}
+      >
+        Message
+      </button>
+    </div>
+  );
+});

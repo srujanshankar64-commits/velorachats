@@ -83,7 +83,7 @@ export default {
   },
   async scheduled(event: unknown, env: unknown, ctx: unknown) {
     try {
-      const { error } = await supabaseAdmin.rpc("cleanup_old_messages");
+      const { error } = await (supabaseAdmin.rpc as unknown as (n: string) => Promise<{ error: { message: string } | null }>)("cleanup_old_messages");
       if (error) {
         console.error("Error running cleanup_old_messages RPC:", error.message);
       }
