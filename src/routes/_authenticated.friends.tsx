@@ -28,6 +28,7 @@ function Friends() {
   const { user } = useAuth();
   const nav = useNavigate();
   const [friends, setFriends] = useState<Friend[] | null>(null);
+  const [friendIds, setFriendIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -41,17 +42,47 @@ function Friends() {
         .limit(80);
 
       if (!active) return;
-      const ids = (rels ?? []).map((r) => (r.requester_id === user.id ? r.addressee_id : r.requester_id));
+      const ids = (rels ?? []).map((r) =>
+        r.requester_id === user.id ? r.addressee_id : r.requester_id
+      );
+      setFriendIds(ids);
       if (ids.length === 0) { setFriends([]); return; }
       const { data: profs } = await supabase
         .from("profiles")
         .select("id,username,name,city,state,is_online")
-        .in("id", ids);
+        .in("id", ids)
+        .order("is_online", { ascending: false });
       if (!active) return;
       setFriends((profs ?? []) as Friend[]);
     })();
     return () => { active = false; };
   }, [user]);
+
+  // ✅ FIX: Realtime subscription to update friend online status live
+  useEffect(() => {
+    if (!user || friendIds.length === 0) return;
+
+    const channel = supabase
+      .channel("friends:presence")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          const updated = payload.new as Friend;
+          // Only care about friends
+          if (!friendIds.includes(updated.id)) return;
+          setFriends((prev) => {
+            if (!prev) return prev;
+            return prev.map((f) =>
+              f.id === updated.id ? { ...f, is_online: updated.is_online } : f
+            );
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { channel.unsubscribe(); };
+  }, [user, friendIds]);
 
   async function openDM(targetId: string) {
     const { error } = await supabase.rpc("get_or_create_dm", { target: targetId });
@@ -59,12 +90,25 @@ function Friends() {
     nav({ to: "/messages/$userId", params: { userId: targetId } });
   }
 
-  const list = useMemo(() => friends ?? [], [friends]);
+  // Sort: online friends first
+  const list = useMemo(
+    () => (friends ?? []).slice().sort((a, b) => Number(b.is_online) - Number(a.is_online)),
+    [friends]
+  );
+
+  const onlineCount = useMemo(() => list.filter((f) => f.is_online).length, [list]);
 
   return (
     <div className="min-h-[100dvh] warm-page">
       <div className="max-w-2xl mx-auto px-4 pt-5 pb-6">
-        <h1 className="text-[28px] font-bold warm-grad-text leading-none mb-5">Friends</h1>
+        <div className="flex items-center justify-between mb-5">
+          <h1 className="text-[28px] font-bold warm-grad-text leading-none">Friends</h1>
+          {friends !== null && list.length > 0 && (
+            <span className="text-[12px]" style={{ color: onlineCount > 0 ? "#6dbf6a" : "#6e5e48" }}>
+              {onlineCount > 0 ? `${onlineCount} online` : "None online"}
+            </span>
+          )}
+        </div>
 
         {friends === null ? (
           <div className="space-y-2">
@@ -98,6 +142,9 @@ const FriendCard = memo(function FriendCard({ f, onMessage }: { f: Friend; onMes
       <div className="flex-1 min-w-0">
         <p className="text-[14px] font-semibold" style={{ color: "#f5f0ea" }}>{displayName}</p>
         {location && <p className="text-[12px] mt-0.5" style={{ color: "#6e5e48" }}>{location}</p>}
+        <p className="text-[11px] mt-0.5" style={{ color: f.is_online ? "#6dbf6a" : "#5e5040" }}>
+          {f.is_online ? "● Online" : "○ Offline"}
+        </p>
       </div>
       <button
         onClick={onMessage}

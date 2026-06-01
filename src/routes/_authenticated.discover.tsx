@@ -24,7 +24,7 @@ type Profile = {
   city: string | null;
   state: string | null;
   is_online: boolean;
-  gender?: string | null;
+  last_seen: string | null;
 };
 
 type Tab = "online" | "all" | "nearby";
@@ -34,43 +34,107 @@ function Discover() {
   const nav = useNavigate();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Tab>("online");
-  const [profiles, setProfiles] = useState<Profile[] | null>(null);
+  // allUsers holds the full unfiltered list from DB — filtering is done client-side
+  const [allUsers, setAllUsers] = useState<Profile[] | null>(null);
   const [meState, setMeState] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [ageMin, setAgeMin] = useState(18);
-  const [ageMax, setAgeMax] = useState(60);
-  const [genderFilter, setGenderFilter] = useState<"all" | "male" | "female">("all");
 
+  // Fetch current user's state once
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("state").eq("id", user.id).single().then(({ data }) => {
-      setMeState((data as { state?: string | null } | null)?.state ?? null);
-    });
+    supabase
+      .from("profiles")
+      .select("state")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        setMeState((data as { state?: string | null } | null)?.state ?? null);
+      });
   }, [user]);
 
+  // Fetch ALL other users once (no server-side filter by tab)
   useEffect(() => {
     if (!user) return;
     let active = true;
-    setProfiles(null);
-    let query = supabase
+    setAllUsers(null);
+    supabase
       .from("profiles")
-      .select("id,username,name,age,city,state,is_online,gender")
+      .select("id,username,name,age,city,state,is_online,last_seen")
       .neq("id", user.id)
-      .limit(80);
-    if (filter === "nearby" && meState) query = query.eq("state", meState);
-    if (q.trim()) query = query.ilike("username", `%${q.trim()}%`);
-    if (ageMin > 18 || ageMax < 60) query = query.gte("age", ageMin).lte("age", ageMax);
-    if (genderFilter !== "all") query = query.eq("gender", genderFilter);
-    query.order("is_online", { ascending: false }).order("last_seen", { ascending: false }).then(({ data, error }) => {
-      if (!active) return;
-      if (error) toast.error(error.message);
-      setProfiles((data ?? []) as Profile[]);
-    });
+      .order("is_online", { ascending: false })
+      .order("last_seen", { ascending: false })
+      .limit(200)
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) toast.error(error.message);
+        setAllUsers((data ?? []) as Profile[]);
+      });
     return () => { active = false; };
-  }, [user, filter, q, meState, ageMin, ageMax, genderFilter]);
+  }, [user]);
 
-  const list = useMemo(() => profiles ?? [], [profiles]);
-  const onlineCount = useMemo(() => list.filter((p) => p.is_online).length, [list]);
+  // Realtime subscription — update individual users in allUsers when their presence changes
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("discover-presence-live")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          const updated = payload.new as Profile;
+          setAllUsers((prev) => {
+            if (!prev) return prev;
+            // If this user isn't in our list yet, ignore
+            const exists = prev.some((u) => u.id === updated.id);
+            if (!exists) return prev;
+            return prev.map((u) => u.id === updated.id ? { ...u, ...updated } : u);
+          });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  // Client-side filtering by tab + search query
+  const list = useMemo(() => {
+    if (!allUsers) return null;
+    let result = allUsers;
+
+    // Apply tab filter
+    if (filter === "online") {
+      result = result.filter((u) => u.is_online === true);
+    } else if (filter === "nearby") {
+      if (!meState) return [];
+      const myState = meState.toLowerCase().trim();
+      result = result.filter((u) => u.state?.toLowerCase().trim() === myState);
+      // For nearby: online first, then offline, both by last_seen desc
+      result = [...result].sort((a, b) => {
+        if (a.is_online && !b.is_online) return -1;
+        if (!a.is_online && b.is_online) return 1;
+        return new Date(b.last_seen ?? 0).getTime() - new Date(a.last_seen ?? 0).getTime();
+      });
+    } else {
+      // Everyone: online first then offline, both by last_seen desc
+      result = [...result].sort((a, b) => {
+        if (a.is_online && !b.is_online) return -1;
+        if (!a.is_online && b.is_online) return 1;
+        return new Date(b.last_seen ?? 0).getTime() - new Date(a.last_seen ?? 0).getTime();
+      });
+    }
+
+    // Apply search query
+    if (q.trim()) {
+      const lq = q.trim().toLowerCase();
+      result = result.filter(
+        (u) =>
+          u.username?.toLowerCase().includes(lq) ||
+          u.name?.toLowerCase().includes(lq)
+      );
+    }
+
+    return result;
+  }, [allUsers, filter, q, meState]);
+
+  const onlineCount = useMemo(() => (allUsers ?? []).filter((p) => p.is_online).length, [allUsers]);
 
   async function openDM(targetId: string) {
     const { error } = await supabase.rpc("get_or_create_dm", { target: targetId });
@@ -88,7 +152,6 @@ function Discover() {
             className="h-9 w-9 rounded-[12px] flex items-center justify-center"
             style={{ background: "#2e2418", border: "0.5px solid #3a2e1e" }}
             aria-label="Filters"
-            onClick={() => setShowFilters(true)}
           >
             <SlidersHorizontal className="h-4 w-4" style={{ color: "#f0ebe4" }} strokeWidth={1.5} />
           </button>
@@ -130,16 +193,20 @@ function Discover() {
 
         {/* Section label */}
         <p className="warm-section-label mb-2 px-1">
-          {filter === "online" ? "Active now" : filter === "nearby" ? "Near you" : "Everyone"} · {profiles ? `${filter === "online" ? onlineCount : list.length} people` : "loading…"}
+          {filter === "online" ? "Active now" : filter === "nearby" ? "Near you" : "Everyone"} · {allUsers ? `${filter === "online" ? onlineCount : (list?.length ?? 0)} people` : "loading…"}
         </p>
 
-        {profiles === null ? (
+        {allUsers === null ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-[78px] rounded-[20px] warm-card neo-shimmer" />
             ))}
           </div>
-        ) : list.length === 0 ? (
+        ) : filter === "nearby" && !meState ? (
+          <p className="text-center text-sm py-12" style={{ color: "#6e5e48" }}>
+            Set your state in your profile to see nearby people.
+          </p>
+        ) : !list || list.length === 0 ? (
           <p className="text-center text-sm py-12" style={{ color: "#6e5e48" }}>No one here right now.</p>
         ) : (
           <div className="flex flex-col gap-2">
@@ -149,71 +216,6 @@ function Discover() {
           </div>
         )}
       </div>
-
-      {/* Filters modal */}
-      {showFilters && (
-        <div className="fixed inset-0 z-[100]" onClick={() => setShowFilters(false)}>
-          <div
-            className="absolute bottom-0 left-0 right-0 rounded-t-[28px] p-6 pb-10"
-            style={{ background: "#1c1610", border: "1px solid #3a2e1e" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-center mb-5">
-              <div className="w-10 h-1 rounded-full" style={{ background: "#3a2e1e" }} />
-            </div>
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-[18px] font-bold" style={{ color: "#f5f0ea" }}>Filters</span>
-              <button
-                onClick={() => { setAgeMin(18); setAgeMax(60); setGenderFilter("all"); }}
-                className="text-[13px]"
-                style={{ color: "#8a7460" }}
-              >
-                Reset
-              </button>
-            </div>
-            <div className="mb-6">
-              <div className="flex justify-between mb-3">
-                <span className="text-[14px] font-semibold" style={{ color: "#f5f0ea" }}>Age Range</span>
-                <span className="text-[13px]" style={{ color: "#8a7460" }}>{ageMin} – {ageMax}</span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <input type="range" min={18} max={60} value={ageMin} onChange={(e) => setAgeMin(Math.min(+e.target.value, ageMax - 1))} className="w-full accent-[#f0e8dc]" />
-                <input type="range" min={18} max={60} value={ageMax} onChange={(e) => setAgeMax(Math.max(+e.target.value, ageMin + 1))} className="w-full accent-[#f0e8dc]" />
-              </div>
-              <div className="flex justify-between mt-1">
-                <span className="text-[11px]" style={{ color: "#8a7460" }}>Min: {ageMin}</span>
-                <span className="text-[11px]" style={{ color: "#8a7460" }}>Max: {ageMax}</span>
-              </div>
-            </div>
-            <div className="mb-7">
-              <span className="text-[14px] font-semibold block mb-3" style={{ color: "#f5f0ea" }}>Gender</span>
-              <div className="flex gap-2">
-                {(["all", "male", "female"] as const).map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setGenderFilter(g)}
-                    className="flex-1 py-2 rounded-[12px] text-[13px] font-medium"
-                    style={{
-                      background: genderFilter === g ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a231a",
-                      color: genderFilter === g ? "#1a1410" : "#8a7460",
-                      border: genderFilter === g ? "none" : "0.5px solid #3a2e1e",
-                    }}
-                  >
-                    {g === "all" ? "All" : g === "male" ? "Male" : "Female"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              onClick={() => setShowFilters(false)}
-              className="w-full py-3 rounded-[16px] text-[15px] font-bold"
-              style={{ background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410" }}
-            >
-              Apply Filters
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
