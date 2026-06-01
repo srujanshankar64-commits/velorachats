@@ -147,7 +147,9 @@ const ChatRow = memo(function ChatRow({ otherId, username, name, online, last, u
       <UserAvatar id={otherId} name={displayName} online={online} size={46} />
       <div className="flex-1 min-w-0">
         <p className="text-[14px] font-semibold truncate" style={{ color: "#f5f0ea" }}>{displayName}</p>
-        <p className="text-[12px] truncate mt-0.5" style={{ color: "#6e5e48" }}>{last?.content ?? "Say hello 🌙"}</p>
+        <p className="text-[12px] truncate mt-0.5" style={{ color: "#6e5e48" }}>
+          {myLast ? "You: " : ""}{last?.content ?? "Say hello 🌙"}
+        </p>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-[11px]" style={{ color: "#5e5040" }}>{fmtTime(last?.created_at)}</span>

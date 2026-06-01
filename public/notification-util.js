@@ -8,7 +8,7 @@ function initChatNotifications() {
 
 // Unlock audio on first user interaction (Chrome requirement)
 function unlockAudio() {
-  const silent = new Audio('/notification.mp3');
+  const silent = new Audio('/notify.mp3');
   silent.volume = 0;
   silent.play().then(() => {
     silent.pause();
@@ -21,7 +21,7 @@ function unlockAudio() {
 // Trigger sound + system notification on new DM
 function playChatAlert(senderName, messageText) {
   // Play sound
-  const audio = new Audio('/notification.mp3');
+  const audio = new Audio('/notify.mp3');
   audio.volume = 1.0;
   audio.play().catch(() => {});
 
