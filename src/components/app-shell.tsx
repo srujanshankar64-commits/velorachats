@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile bottom nav with center button */}
       {!hideNav && (
         <nav
-          className="md:hidden fixed bottom-3 left-3 right-3 z-50 bg-white border border-gray-200 rounded-3xl"
+          className="md:hidden fixed bottom-3 left-3 right-3 z-50 bg-[#f5f0ea] border border-[#e8e2d9] rounded-3xl"
           style={{ paddingTop: 10, paddingBottom: `calc(env(safe-area-inset-bottom) + 16px)` }}
         >
           <div className="grid grid-cols-5 items-end px-2">
