@@ -52,7 +52,7 @@ function Landing() {
 
   async function cta() {
     if (user) return nav({ to: "/discover" });
-    window.location.href = "/auth?guest=true";
+    window.location.href = "/auth";
   }
 
   const features = [
