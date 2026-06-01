@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Compass, Users, MessageCircle, Hash, User } from "lucide-react";
 import { useUnread } from "@/lib/unread";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 const SIDE_ITEMS: ReadonlyArray<{ to: "/discover" | "/friends" | "/messages" | "/rooms" | "/profile"; label: string; icon: typeof Compass; showBadge?: boolean }> = [
   { to: "/discover", label: "Discover", icon: Compass },
@@ -30,20 +30,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const inRoomChat = /^\/rooms\/[^/]+/.test(pathname);
   const hideNav = inDmChat || inRandomChat || inRoomChat;
 
-  const [navVisible, setNavVisible] = useState(true);
+  const navRef = useRef<HTMLElement>(null);
   const lastScrollY = useRef(0);
-  const scrollUpAmount = useRef(0);
+  const currentTranslate = useRef(0);
 
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       const diff = currentScrollY - lastScrollY.current;
-      if (diff > 0) {
-        setNavVisible(false);
-        scrollUpAmount.current = 0;
-      } else {
-        scrollUpAmount.current += Math.abs(diff);
-        if (scrollUpAmount.current > 80) setNavVisible(true);
+      const nav = navRef.current;
+      if (nav) {
+        const maxTranslate = nav.offsetHeight + 24;
+        currentTranslate.current = Math.max(0, Math.min(maxTranslate, currentTranslate.current + diff));
+        nav.style.transform = `translateY(${currentTranslate.current}px)`;
       }
       lastScrollY.current = currentScrollY;
     };
@@ -111,8 +110,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile bottom nav with center button */}
       {!hideNav && (
         <nav
+          ref={navRef}
           className="md:hidden fixed bottom-3 left-3 right-3 z-50 bg-[#f5f0ea] border border-[#e8e2d9] rounded-3xl"
-          style={{ paddingTop: 10, paddingBottom: `calc(env(safe-area-inset-bottom) + 16px)`, transform: navVisible ? "translateY(0)" : "translateY(calc(100% + 16px))", transition: "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)" }}
+          style={{ paddingTop: 10, paddingBottom: `calc(env(safe-area-inset-bottom) + 16px)` }}
         >
           <div className="grid grid-cols-5 items-end px-2">
             {NAV_LEFT.map(({ to, label, icon: Icon }) => {
