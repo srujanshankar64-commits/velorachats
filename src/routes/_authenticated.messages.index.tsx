@@ -1,24 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { memo, useEffect, useMemo, useState } from "react";
-import { MessageCircle, Search, Eye } from "lucide-react";
+import { MessageCircle, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useUnread } from "@/lib/unread";
-import { GHOST_USERS, loadGhostMessages } from "@/lib/ghost-users";
+import { UserAvatar } from "@/components/user-avatar";
 
 export const Route = createFileRoute("/_authenticated/messages/")({
-  head: () => ({ meta: [{ title: "Messages — ShhChats" }] }),
+  head: () => ({
+    meta: [
+      { title: "Messages — ShhChats" },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
   component: Messages,
 });
 
 type RoomRow = {
-  id: string;
-  user_a: string;
-  user_b: string;
-  created_at: string;
-  other?: { id: string; username: string; avatar_url: string | null; is_online: boolean; last_seen_at?: string | null } | null;
+  id: string; user_a: string; user_b: string; created_at: string;
+  other?: { id: string; username: string; name: string | null; is_online: boolean };
   last?: { content: string; created_at: string; sender_id: string } | null;
-  otherLastRead?: string | null;
 };
 
 function fmtTime(iso?: string) {
@@ -35,18 +36,9 @@ function fmtTime(iso?: string) {
 function Messages() {
   const { user } = useAuth();
   const { unread } = useUnread();
-  const [rooms, setRooms] = useState<RoomRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rooms, setRooms] = useState<RoomRow[] | null>(null);
   const [q, setQ] = useState("");
-  const [tick, setTick] = useState(0);
 
-  // Re-evaluate online status every 10 seconds (ticks)
-  useEffect(() => {
-    const timer = setInterval(() => setTick((t) => t + 1), 10000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Fetch rooms on load
   useEffect(() => {
     if (!user) return;
     let active = true;
@@ -60,33 +52,11 @@ function Messages() {
         .limit(50);
 
       const rows = (roomsData ?? []) as RoomRow[];
-      if (rows.length === 0) {
-        // Still check for ghost conversations before giving up
-        const ghostRows: RoomRow[] = GHOST_USERS
-          .map((g) => {
-            const msgs = loadGhostMessages(g.id);
-            if (msgs.length === 0) return null;
-            const last = msgs[msgs.length - 1];
-            return {
-              id: `ghost-${g.id}`,
-              user_a: user.id,
-              user_b: g.id,
-              created_at: last.created_at,
-              other: { id: g.id, username: g.name || g.username, avatar_url: g.avatar_url, is_online: true, last_seen_at: new Date().toISOString() },
-              last: { content: last.content, created_at: last.created_at, sender_id: last.sender_id },
-              otherLastRead: null,
-            } as RoomRow;
-          })
-          .filter(Boolean) as RoomRow[];
-        ghostRows.sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at));
-        if (active) { setRooms(ghostRows); setLoading(false); }
-        return;
-      }
+      if (rows.length === 0) { if (active) setRooms([]); return; }
 
       const otherIds = Array.from(new Set(rows.map((r) => r.user_a === user.id ? r.user_b : r.user_a)));
-      const [{ data: profs }, { data: reads }, ...lastMsgs] = await Promise.all([
-        supabase.from("profiles").select("id,username,avatar_url,is_online,last_seen_at").in("id", otherIds),
-        supabase.from("room_reads").select("room_id,last_read_at,user_id").in("room_id", rows.map((r) => r.id)),
+      const [{ data: profs }, ...lastMsgs] = await Promise.all([
+        supabase.from("profiles").select("id,username,name,is_online").in("id", otherIds),
         ...rows.map((r) => supabase.from("messages").select("content,created_at,sender_id").eq("room_id", r.id).order("created_at", { ascending: false }).limit(1).maybeSingle()),
       ]);
       const profMap = new Map((profs ?? []).map((p) => [p.id, p as RoomRow["other"]]));
@@ -94,116 +64,64 @@ function Messages() {
         const oid = r.user_a === user.id ? r.user_b : r.user_a;
         r.other = profMap.get(oid);
         r.last = (lastMsgs[i]?.data as RoomRow["last"]) ?? null;
-        const otherRead = (reads ?? []).find((x) => x.room_id === r.id && x.user_id === oid);
-        r.otherLastRead = otherRead?.last_read_at ?? null;
       });
-      // Merge ghost conversations (localStorage) into the list
-      const ghostRows: RoomRow[] = GHOST_USERS
-        .map((g) => {
-          const msgs = loadGhostMessages(g.id);
-          if (msgs.length === 0) return null;
-          const last = msgs[msgs.length - 1];
-          return {
-            id: `ghost-${g.id}`,
-            user_a: user.id,
-            user_b: g.id,
-            created_at: last.created_at,
-            other: {
-              id: g.id,
-              username: g.name || g.username,
-              avatar_url: g.avatar_url,
-              is_online: true,
-              last_seen_at: new Date().toISOString(),
-            },
-            last: {
-              content: last.content,
-              created_at: last.created_at,
-              sender_id: last.sender_id,
-            },
-            otherLastRead: null,
-          } as RoomRow;
-        })
-        .filter(Boolean) as RoomRow[];
-
-      const allRows = [...rows, ...ghostRows];
-      // Sort by most recent message
-      allRows.sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at));
-      if (active) { setRooms(allRows); setLoading(false); }
+      rows.sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at));
+      if (active) setRooms(rows);
     })();
     return () => { active = false; };
   }, [user]);
 
-  // Real-time listener for database updates on profiles to update is_online state
-  useEffect(() => {
-    const ch = supabase.channel("messages-index-profiles-sync")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, (payload) => {
-        const updated = payload.new as RoomRow["other"];
-        if (!updated) return;
-        setRooms((prev) =>
-          prev.map((r) => {
-            if (r.other && r.other.id === updated.id) {
-              return { ...r, other: { ...r.other, ...updated } };
-            }
-            return r;
-          })
-        );
-      })
-      .subscribe();
-    return () => {
-      ch.unsubscribe();
-    };
-  }, []);
-
   const filtered = useMemo(() => {
+    const list = rooms ?? [];
     const term = q.trim().toLowerCase();
-    if (!term) return rooms;
-    return rooms.filter((r) => r.other?.username.toLowerCase().includes(term));
+    if (!term) return list;
+    return list.filter((r) => (r.other?.name || r.other?.username || "").toLowerCase().includes(term));
   }, [rooms, q]);
 
-  // Helper to determine if partner is online
-  const getIsOnline = (other: RoomRow["other"]) => {
-    if (!other || !other.is_online || !other.last_seen_at) return false;
-    const diff = Date.now() - new Date(other.last_seen_at).getTime();
-    return diff < 60000;
-  };
-
   return (
-    <div className="min-h-[100dvh] bg-black text-white">
+    <div className="min-h-[100dvh] warm-page">
       <div className="max-w-2xl mx-auto px-4 pt-5 pb-6">
-        <h1 className="text-[20px] mb-4">Messages</h1>
-        <div className="flex items-center gap-2 h-10 px-4 rounded-full bg-[#1C1C1E] mb-3">
-          <Search className="h-4 w-4 text-[#666]" strokeWidth={1.5} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats…" className="flex-1 bg-transparent outline-none text-sm placeholder:text-[#666]" />
+        <h1 className="text-[28px] font-bold warm-grad-text leading-none mb-4">Messages</h1>
+
+        <div className="flex items-center gap-2 h-11 px-4 rounded-[16px] warm-input mb-3 mx-2">
+          <Search className="h-4 w-4" style={{ color: "#6e5e48" }} strokeWidth={1.5} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search chats..."
+            className="flex-1 bg-transparent outline-none text-[15px] placeholder:text-[#6e5e48] text-[#f5f0ea]"
+          />
         </div>
 
-        {loading ? (
-          <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-[72px] rounded-2xl bg-[#0d0d0e]" />)}</div>
+        {rooms === null ? (
+          <div className="space-y-2 mt-3 px-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-[78px] rounded-[20px] warm-card neo-shimmer" />
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
-            <MessageCircle className="h-8 w-8 mx-auto text-[#444] mb-3" strokeWidth={1.5} />
-            <p className="text-sm text-[#888] mb-5">{rooms.length === 0 ? "No conversations yet" : "No matches"}</p>
-            {rooms.length === 0 && (
-              <Link to="/random" className="inline-block px-6 h-12 leading-[3rem] rounded-full bg-[#7C3AED] text-sm">Start a random chat</Link>
+            <MessageCircle className="h-8 w-8 mx-auto mb-3" style={{ color: "#3e3222" }} strokeWidth={1.5} />
+            <p className="text-sm mb-5" style={{ color: "#6e5e48" }}>{(rooms?.length ?? 0) === 0 ? "No conversations yet" : "No matches"}</p>
+            {(rooms?.length ?? 0) === 0 && (
+              <Link to="/discover" className="inline-block rounded-[13px] text-[13px] font-semibold warm-grad-bg" style={{ color: "#1a1410", padding: "10px 22px" }}>
+                Find someone awake 🌙
+              </Link>
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-0.5">
-            {filtered.map((r) => {
-              if (!r.other) return null;
-              const online = getIsOnline(r.other);
-              return (
-                <Row key={r.id}
-                  otherId={r.other.id}
-                  username={r.other.username}
-                  avatar={r.other.avatar_url}
-                  online={online}
-                  last={r.last}
-                  myId={user!.id}
-                  otherLastRead={r.otherLastRead ?? null}
-                  unread={unread[r.other.id] ?? 0}
-                />
-              );
-            })}
+          <div className="flex flex-col gap-1.5 mt-1">
+            {filtered.map((r) => r.other && (
+              <ChatRow
+                key={r.id}
+                otherId={r.other.id}
+                username={r.other.username}
+                name={r.other.name}
+                online={r.other.is_online}
+                last={r.last}
+                unread={unread[r.other.id] ?? 0}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -211,39 +129,33 @@ function Messages() {
   );
 }
 
-const Row = memo(function Row({ otherId, username, avatar, online, last, myId, otherLastRead, unread }: {
+const ChatRow = memo(function ChatRow({ otherId, username, name, online, last, unread }: {
   otherId: string;
   username: string;
-  avatar: string | null;
+  name: string | null;
   online: boolean;
   last: RoomRow["last"];
-  myId: string;
-  otherLastRead: string | null;
   unread: number;
 }) {
-  const myLast = last && last.sender_id === myId;
-  const seen = myLast && otherLastRead && otherLastRead >= last!.created_at;
+  const displayName = name || username;
   return (
-    <Link to="/messages/$userId" params={{ userId: otherId }} className="flex items-center gap-3 h-[72px] px-2 rounded-2xl hover:bg-[#1C1C1E] transition-opacity duration-200">
-      <div className="relative shrink-0">
-        {avatar ? (
-          <img src={avatar} alt="" loading="lazy" width={44} height={44} className="h-11 w-11 rounded-full" />
-        ) : (
-          <div className="h-11 w-11 rounded-full bg-[#7C3AED] flex items-center justify-center text-sm text-white font-semibold">{username[0]?.toUpperCase()}</div>
-        )}
-        {online && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-[#22C55E] ring-2 ring-black" />}
-      </div>
+    <Link
+      to="/messages/$userId"
+      params={{ userId: otherId }}
+      className="flex items-center gap-[13px] p-[14px] rounded-[20px] warm-card neo-shadow mx-2"
+    >
+      <UserAvatar id={otherId} name={displayName} online={online} size={46} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-white truncate">{username}</p>
-        <p className="text-[13px] text-[#888] truncate">{last?.content ?? "Say hi 👋"}</p>
+        <p className="text-[14px] font-semibold truncate" style={{ color: "#f5f0ea" }}>{displayName}</p>
+        <p className="text-[12px] truncate mt-0.5" style={{ color: "#6e5e48" }}>{last?.content ?? "Say hello 🌙"}</p>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
-        <span className="text-[11px] text-[#666]">{fmtTime(last?.created_at)}</span>
-        {unread > 0 ? (
-          <span className="min-w-[18px] h-[18px] px-1.5 rounded-full bg-[#7C3AED] text-[10px] text-white flex items-center justify-center">{unread > 99 ? "99+" : unread}</span>
-        ) : seen ? (
-          <Eye className="h-3.5 w-3.5 text-[#7C3AED]" strokeWidth={1.5} />
-        ) : null}
+        <span className="text-[11px]" style={{ color: "#5e5040" }}>{fmtTime(last?.created_at)}</span>
+        {unread > 0 && (
+          <span className="min-w-[20px] h-[18px] px-2 rounded-[10px] warm-grad-bg text-[10px] font-semibold flex items-center justify-center" style={{ color: "#1a1410" }}>
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
       </div>
     </Link>
   );
