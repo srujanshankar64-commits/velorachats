@@ -120,6 +120,7 @@ function Messages() {
                 online={r.other.is_online}
                 last={r.last}
                 unread={unread[r.other.id] ?? 0}
+                myId={user!.id}
               />
             ))}
           </div>
@@ -129,15 +130,17 @@ function Messages() {
   );
 }
 
-const ChatRow = memo(function ChatRow({ otherId, username, name, online, last, unread }: {
+const ChatRow = memo(function ChatRow({ otherId, username, name, online, last, unread, myId }: {
   otherId: string;
   username: string;
   name: string | null;
   online: boolean;
   last: RoomRow["last"];
   unread: number;
+  myId: string;
 }) {
   const displayName = name || username;
+  const myLast = last && last.sender_id === myId;
   return (
     <Link
       to="/messages/$userId"
