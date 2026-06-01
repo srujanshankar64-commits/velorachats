@@ -52,7 +52,7 @@ function Discover() {
       .select("id,username,name,age,city,state,is_online")
       .neq("id", user.id)
       .limit(80);
-    if (filter === "online") query = query.eq("is_online", true);
+    if (filter === "online") if (filter === "online") query = query.eq("is_online", true);
     if (filter === "nearby" && meState) query = query.eq("state", meState);
     if (q.trim()) query = query.ilike("username", `%${q.trim()}%`);
     query.order("is_online", { ascending: false }).order("last_seen", { ascending: false }).then(({ data, error }) => {
