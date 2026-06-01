@@ -275,10 +275,8 @@ function AuthPage() {
           }}
           onFocus={() => setShowStateSugg(true)}
           onBlur={() => setTimeout(() => setShowStateSugg(false), 150)}
-          placeholder={countrySelected ? "State" : "Select country first"}
-          required
-          disabled={!countrySelected}
-          className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666] text-white disabled:opacity-40"
+          placeholder="State"
+          className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666] text-white"
         />
         {showStateSugg && filteredStates.length > 0 && (
           <ul className="absolute z-50 top-13 left-0 right-0 bg-[#2a2a2e] rounded-2xl overflow-hidden shadow-lg mt-1">
