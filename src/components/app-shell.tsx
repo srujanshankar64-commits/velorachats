@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   to={to}
                   className="relative flex items-center gap-3 px-3 h-11 rounded-full"
                   style={{
-                    color: active ? "#f5f0ea" : isWarmRoute ? "#6e5e48" : "#888",
+                    color: active ? "#1a1410" : isWarmRoute ? "#6e5e48" : "#888",
                     background: active ? (isWarmRoute ? "#201c14" : "#1C1C1E") : "transparent",
                   }}
                 >
@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile bottom nav with center button */}
       {!hideNav && (
         <nav
-          className="md:hidden fixed bottom-3 left-3 right-3 z-50 warm-nav-bg border border-white/25 rounded-3xl"
+          className="md:hidden fixed bottom-3 left-3 right-3 z-50 bg-white border border-gray-200 rounded-3xl"
           style={{ paddingTop: 10, paddingBottom: `calc(env(safe-area-inset-bottom) + 16px)` }}
         >
           <div className="grid grid-cols-5 items-end px-2">
@@ -100,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={to}
                   to={to}
                   className="flex flex-col items-center gap-1 py-1"
-                  style={{ color: active ? "#f5f0ea" : "rgba(255,255,255,0.55)" }}
+                  style={{ color: active ? "#1a1410" : "#9ca3af" }}
                 >
                   <Icon className="h-5 w-5" strokeWidth={1.5} />
                   <span className="text-[10px] font-medium">{label}</span>
@@ -125,7 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </span>
                 )}
               </span>
-              <span className="text-[10px] font-medium mt-1" style={{ color: centerActive ? "#f5f0ea" : "rgba(255,255,255,0.55)" }}>Chat</span>
+              <span className="text-[10px] font-medium mt-1" style={{ color: centerActive ? "#1a1410" : "#9ca3af" }}>Chat</span>
             </Link>
 
             {NAV_RIGHT.map(({ to, label, icon: Icon }) => {
@@ -135,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={to}
                   to={to}
                   className="flex flex-col items-center gap-1 py-1"
-                  style={{ color: active ? "#f5f0ea" : "rgba(255,255,255,0.55)" }}
+                  style={{ color: active ? "#1a1410" : "#9ca3af" }}
                 >
                   <Icon className="h-5 w-5" strokeWidth={1.5} />
                   <span className="text-[10px] font-medium">{label}</span>
