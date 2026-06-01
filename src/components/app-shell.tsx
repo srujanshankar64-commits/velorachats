@@ -2,13 +2,13 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Compass, Users, MessageCircle, Hash, User } from "lucide-react";
 import { useUnread } from "@/lib/unread";
 
-const SIDE_ITEMS = [
+const SIDE_ITEMS: ReadonlyArray<{ to: "/discover" | "/friends" | "/messages" | "/rooms" | "/profile"; label: string; icon: typeof Compass; showBadge?: boolean }> = [
   { to: "/discover", label: "Discover", icon: Compass },
   { to: "/friends", label: "Friends", icon: Users },
   { to: "/messages", label: "Chats", icon: MessageCircle, showBadge: true },
   { to: "/rooms", label: "Rooms", icon: Hash },
   { to: "/profile", label: "Me", icon: User },
-] as const;
+];
 
 const NAV_LEFT = [
   { to: "/discover", label: "Discover", icon: Compass },

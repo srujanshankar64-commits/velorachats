@@ -86,7 +86,7 @@ function Room() {
     const fetchMessages = async () => {
       const { data: dbData, error } = await supabase
         .from("room_messages")
-        .select("id, user_id, content, created_at, profiles:user_id(username,name)")
+        .select("id, user_id, content, created_at")
         .eq("room_id", roomId)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -94,20 +94,23 @@ function Room() {
       if (error || !active || !dbData) return;
 
       const ordered = [...dbData].reverse();
+      const userIds = Array.from(new Set(ordered.map((m) => m.user_id)));
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id,username,name")
+        .in("id", userIds);
+
       const cache: Record<string, { username: string; name: string | null }> = {};
-      const mapped = ordered.map((m: { id: string; user_id: string; content: string; created_at: string; profiles?: { username?: string; name?: string | null } | null }) => {
-        const uname = m.profiles?.username || "unknown";
-        const nm = m.profiles?.name ?? null;
-        cache[m.user_id] = { username: uname, name: nm };
-        return {
-          id: m.id,
-          user_id: m.user_id,
-          content: m.content,
-          created_at: m.created_at,
-          username: uname,
-          name: nm,
-        };
-      });
+      (profs ?? []).forEach((p) => { cache[p.id] = { username: p.username || "unknown", name: (p as { name?: string | null }).name ?? null }; });
+
+      const mapped: Msg[] = ordered.map((m) => ({
+        id: m.id,
+        user_id: m.user_id,
+        content: m.content,
+        created_at: m.created_at,
+        username: cache[m.user_id]?.username || "unknown",
+        name: cache[m.user_id]?.name ?? null,
+      }));
       setProfilesCache((prev) => ({ ...prev, ...cache }));
       setMsgs(mapped);
     };
