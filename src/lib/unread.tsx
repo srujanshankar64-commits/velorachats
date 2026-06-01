@@ -100,7 +100,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
   // Periodic message cleanup
   useEffect(() => {
     if (!user) return;
-    const run = async () => { try { await supabase.rpc("cleanup_old_messages"); } catch (_) {} };
+    const run = async () => { try { await (supabase.rpc as unknown as (n: string) => Promise<unknown>)("cleanup_old_messages"); } catch (_) {} };
     run();
     const id = setInterval(run, 30_000);
     return () => clearInterval(id);

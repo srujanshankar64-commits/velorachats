@@ -73,9 +73,8 @@ export function useNotifications({ currentUserId, activeChatUserId }: UseNotific
         icon: senderAvatar || "/favicon.ico",
         badge: "/favicon.ico",
         tag: `dm-${chatUserId}`,
-        renotify: true,
         silent: true,
-      });
+      } as NotificationOptions);
       notif.onclick = () => {
         window.focus();
         notif.close();
@@ -126,13 +125,13 @@ export function useGlobalDMListener({ currentUserId, activeChatUserId }: UseNoti
 
           const { data: profile } = await supabase
             .from("profiles")
-            .select("full_name, avatar_url, username")
+            .select("name, avatar_url, username")
             .eq("id", msg.sender_id)
             .single();
 
           notify({
             senderId: msg.sender_id,
-            senderName: profile?.full_name || profile?.username || "Someone",
+            senderName: profile?.name || profile?.username || "Someone",
             senderAvatar: profile?.avatar_url ?? null,
             message: msg.content || "",
             chatUserId: otherUserId || msg.sender_id,

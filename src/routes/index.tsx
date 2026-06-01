@@ -142,6 +142,9 @@ function Landing() {
         <section className="px-6 py-16 max-w-5xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[
+              { q: "It's always 2am when my brain decides to overthink. ShhChats is the only place I can talk it out.", n: "Arjun M., 23, Hyderabad" },
+              { q: "Met someone from Chennai at midnight. We talked for 3 hours. Never felt less alone.", n: "Sneha K., 21, Bangalore" },
+              { q: "My friends are asleep. My family won't understand. ShhChats always has someone awake.", n: "Rohan S., 25, Delhi" },
             ].map((t) => (
               <figure key={t.n} className="rounded-2xl p-5 surface border-soft">
                 <blockquote className="text-sm text-[#E8EAED] italic leading-relaxed">"{t.q}"</blockquote>
@@ -157,12 +160,15 @@ function Landing() {
           <Link to="/safety" className="hover:text-[#E8EAED]">Safety</Link>
           <Link to="/privacy" className="hover:text-[#E8EAED]">Privacy</Link>
           <Link to="/contact" className="hover:text-[#E8EAED]">Contact</Link>
-          
         </div>
         <span>© 2026 ShhChats. Late night conversations.</span>
       </footer>
     </div>
   );
+}
+
+declare global {
+  interface Window { playChatAlert?: (sender: string, text: string) => void }
 }
 
 if (typeof window !== 'undefined') {

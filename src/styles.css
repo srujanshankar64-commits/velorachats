@@ -136,3 +136,27 @@
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+/* === Warm Dark Neomorphic system (Discover / Friends / Chats / Chat Room / Rooms / Me) === */
+@keyframes shimmer { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.7; } }
+
+.neo-shadow { box-shadow: 4px 4px 10px rgba(0,0,0,0.5), -1px -1px 4px rgba(255,255,255,0.025); }
+.neo-shimmer { animation: shimmer 1.4s ease-in-out infinite; }
+
+.warm-grad-text {
+  background: linear-gradient(90deg, #ffffff, #f0e8dc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.warm-grad-bg { background: linear-gradient(135deg, #ffffff, #f0e8dc); }
+.warm-page { background: #1a1512; color: #f5f0ea; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif; }
+.warm-card { background: #201c14; border: 0.5px solid #2e2618; }
+.warm-input { background: #201c14; border: 0.5px solid #332a1c; color: #f5f0ea; }
+.warm-input::placeholder { color: #6e5e48; }
+.warm-pill-inactive { background: #231d13; border: 0.5px solid #33291a; color: #6e5e48; }
+.warm-btn-secondary { background: #2a2318; color: #f0ebe4; border: 0.5px solid #3e3222; }
+.warm-nav-bg { background: #141008; border-top: 0.5px solid #262018; }
+.warm-section-label { color: #5e5040; font-weight: 600; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; }
+

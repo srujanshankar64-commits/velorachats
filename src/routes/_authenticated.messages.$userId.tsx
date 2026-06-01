@@ -1,15 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, MoreHorizontal, Check, CheckCheck } from "lucide-react";
+import { ArrowLeft, ArrowUp, MoreHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useUnread } from "@/lib/unread";
 import { useKeyboardInset } from "@/lib/use-keyboard-inset";
 import { useSwipeBack } from "@/lib/use-swipe-back";
+import { UserAvatar } from "@/components/user-avatar";
 import { toast } from "sonner";
-import { isGhost, GHOST_MAP, loadGhostMessages, saveGhostMessages } from "@/lib/ghost-users";
-import data from "@emoji-mart/data";
-import Picker from "@emoji-mart/react";
 
 export const Route = createFileRoute("/_authenticated/messages/$userId")({
   head: () => ({
@@ -30,24 +28,13 @@ type Msg = {
   delivered_at?: string | null;
   status?: string;
   _local?: boolean;
-  _deleting?: boolean;
 };
-type Other = {
-  id: string;
-  username: string;
-  avatar_url: string | null;
-  is_online: boolean;
-  last_seen_at?: string | null;
-};
+type Other = { id: string; username: string; name: string | null; is_online: boolean };
 
 const CRISIS_RE = /\b(suicide|kill myself|end it|hurt myself|want to die)\b/i;
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function DMChat() {
@@ -57,71 +44,32 @@ function DMChat() {
   const nav = useNavigate();
   const goBack = useCallback(() => nav({ to: "/messages" }), [nav]);
 
-  // Ghost detection — computed once per userId
-  const ghostMode = isGhost(userId);
-  const ghostProfile = ghostMode ? GHOST_MAP.get(userId) : undefined;
-
   const [roomId, setRoomId] = useState<string | null>(null);
   const [other, setOther] = useState<Other | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
-  const [otherTyping] = useState(false); // ghosts never type
+  const [otherTyping, setOtherTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [crisis, setCrisis] = useState(false);
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [isPartnerOnline, setIsPartnerOnline] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
   const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const msgsChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const lastPollTsRef = useRef<string>(new Date(0).toISOString());
-  const isTypingRef = useRef(false);
-  const typingTimeoutRef = useRef<number | null>(null);
-  const receiverTypingTimeoutRef = useRef<number | null>(null);
-
+  const typingTimerRef = useRef<number | null>(null);
   const inset = useKeyboardInset();
   useSwipeBack(goBack);
 
-  // Tab title badge
   useEffect(() => {
     document.title = unreadTotal > 0 ? `(${unreadTotal}) ShhChats` : "ShhChats";
-    return () => {
-      document.title = "ShhChats";
-    };
+    return () => { document.title = "ShhChats"; };
   }, [unreadTotal]);
 
-  // ─── GHOST MODE: load profile + messages from localStorage ────────────────
   useEffect(() => {
-    if (!ghostMode || !ghostProfile || !user) return;
-    setOther({
-      id: ghostProfile.id,
-      username: ghostProfile.name || ghostProfile.username,
-      avatar_url: ghostProfile.avatar_url,
-      is_online: true,
-      last_seen_at: new Date().toISOString(),
-    });
-    setRoomId(`ghost-${userId}`);
-    setIsPartnerOnline(true);
-    const stored = loadGhostMessages(userId) as Msg[];
-    setMessages(stored);
-    if (stored.length > 0) {
-      lastPollTsRef.current = stored[stored.length - 1].created_at;
-    }
-  }, [ghostMode, ghostProfile, userId, user]);
-
-  // ─── REAL MODE: load room + profile + history from Supabase ───────────────
-  useEffect(() => {
-    if (ghostMode || !user) return;
+    if (!user) return;
     let active = true;
     (async () => {
       const [{ data: prof }, { data: rid, error }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id,username,avatar_url,is_online,last_seen_at")
-          .eq("id", userId)
-          .single(),
+        supabase.from("profiles").select("id,username,name,is_online").eq("id", userId).single(),
         supabase.rpc("get_or_create_dm", { target: userId }),
       ]);
       if (!active) return;
@@ -133,97 +81,32 @@ function DMChat() {
         .from("messages")
         .select("id,sender_id,content,created_at,read_at,delivered_at,status")
         .eq("room_id", rid as string)
-        .order("created_at", { ascending: false })
-        .limit(50);
+        .order("created_at")
+        .limit(100);
       if (!active) return;
-      if (msgs) {
-        const sorted = [...msgs].reverse() as Msg[];
-        setMessages(sorted);
-        if (sorted.length > 0) {
-          lastPollTsRef.current = sorted[sorted.length - 1].created_at;
-        }
-      }
-      if (!document.hidden) {
-        markRead(userId);
-      }
+      if (msgs) setMessages(msgs as Msg[]);
+      markRead(userId);
+
+      await supabase
+        .from("messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("room_id", rid as string)
+        .neq("sender_id", user.id)
+        .is("read_at", null);
     })();
-    return () => {
-      active = false;
-    };
-  }, [ghostMode, userId, user, markRead]);
+    return () => { active = false; };
+  }, [userId, user, markRead]);
 
-  // ─── REAL MODE: presence status ───────────────────────────────────────────
   useEffect(() => {
-    if (ghostMode || !other) return;
-    const checkOnline = () => {
-      const online =
-        other.is_online &&
-        other.last_seen_at &&
-        Date.now() - new Date(other.last_seen_at).getTime() < 60000;
-      setIsPartnerOnline(!!online);
-    };
-    checkOnline();
-    const timer = setInterval(checkOnline, 10000);
-    return () => clearInterval(timer);
-  }, [ghostMode, other]);
-
-  // ─── REAL MODE: profile changes listener ──────────────────────────────────
-  useEffect(() => {
-    if (ghostMode) return;
+    if (!roomId || !user) return;
     const ch = supabase
-      .channel(`profile-partner:${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${userId}`,
-        },
-        (payload) => {
-          const updated = payload.new as Other & { last_seen_at?: string };
-          setOther((prev) => (prev ? { ...prev, ...updated } : null));
-        }
-      )
-      .subscribe();
-    return () => {
-      ch.unsubscribe();
-    };
-  }, [ghostMode, userId]);
-
-  const handleDeleteMessage = useCallback((deletedId: string) => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === deletedId ? { ...m, _deleting: true } : m))
-    );
-    window.setTimeout(() => {
-      setMessages((prev) => prev.filter((m) => m.id !== deletedId));
-    }, 400);
-  }, []);
-
-  // ─── REAL MODE: postgres_changes for messages ─────────────────────────────
-  useEffect(() => {
-    if (ghostMode || !roomId || !user) return;
-    const ch = supabase
-      .channel(`msgs:${roomId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `room_id=eq.${roomId}`,
-        },
+      .channel(`room:${roomId}`, { config: { broadcast: { self: false } } })
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
         (payload) => {
           const m = payload.new as Msg;
-          if (m.created_at > lastPollTsRef.current)
-            lastPollTsRef.current = m.created_at;
           setMessages((prev) => {
-            const idx = prev.findIndex(
-              (x) =>
-                x._local &&
-                x.sender_id === m.sender_id &&
-                x.content === m.content
-            );
+            const idx = prev.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
             if (idx >= 0) {
               const copy = prev.slice();
               copy[idx] = m;
@@ -233,462 +116,204 @@ function DMChat() {
             return [...prev, m];
           });
           if (m.sender_id !== user.id) {
-            if (!document.hidden) {
-              markRead(userId);
-            }
+            markRead(userId);
+            supabase.from("messages").update({ read_at: new Date().toISOString() }).eq("id", m.id).then(() => {});
           }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "messages",
-          filter: `room_id=eq.${roomId}`,
-        },
+        })
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
         (payload) => {
           const m = payload.new as Msg;
-          setMessages((prev) =>
-            prev.map((x) => (x.id === m.id ? { ...x, ...m } : x))
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "messages",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          const oldId = (payload.old as { id: string }).id;
-          handleDeleteMessage(oldId);
-        }
-      )
-      .subscribe();
-    msgsChRef.current = ch;
-    return () => {
-      ch.unsubscribe();
-      msgsChRef.current = null;
-    };
-  }, [ghostMode, roomId, user, userId, markRead, handleDeleteMessage]);
-
-  // ─── REAL MODE: broadcast typing ──────────────────────────────────────────
-  useEffect(() => {
-    if (ghostMode || !roomId || !user) return;
-    const ch = supabase
-      .channel(`tc${roomId}`, {
-        config: { broadcast: { self: false, ack: false } },
-      })
+          setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
+        })
       .on("broadcast", { event: "typing" }, (payload) => {
         const p = payload.payload as { from: string; typing: boolean };
         if (p.from === userId) {
-          if (receiverTypingTimeoutRef.current) {
-            window.clearTimeout(receiverTypingTimeoutRef.current);
-            receiverTypingTimeoutRef.current = null;
-          }
-          if (p.typing) {
-            receiverTypingTimeoutRef.current = window.setTimeout(() => {
-              receiverTypingTimeoutRef.current = null;
-            }, 4000);
-          }
+          setOtherTyping(p.typing);
+          if (p.typing) window.setTimeout(() => setOtherTyping(false), 2500);
         }
-      });
+      })
+      .subscribe();
     typingChRef.current = ch;
-    ch.subscribe();
-    return () => {
-      ch.unsubscribe();
-      typingChRef.current = null;
-    };
-  }, [ghostMode, roomId, user, userId]);
+    return () => { ch.unsubscribe(); typingChRef.current = null; };
+  }, [roomId, user, userId, markRead]);
 
-  // ─── REAL MODE: polling fallback ──────────────────────────────────────────
-  useEffect(() => {
-    if (ghostMode || !roomId || !user) return;
-    const poll = async () => {
-      const since = lastPollTsRef.current;
-      const { data } = await supabase
-        .from("messages")
-        .select("id,sender_id,content,created_at,read_at,delivered_at,status")
-        .eq("room_id", roomId)
-        .gt("created_at", since)
-        .order("created_at", { ascending: true });
-      if (!data || data.length === 0) return;
-      lastPollTsRef.current = data[data.length - 1].created_at;
-      setMessages((prev) => {
-        let next = [...prev];
-        for (const m of data as Msg[]) {
-          const idx = next.findIndex(
-            (x) =>
-              x._local &&
-              x.sender_id === m.sender_id &&
-              x.content === m.content
-          );
-          if (idx >= 0) {
-            next[idx] = m;
-            continue;
-          }
-          if (next.some((x) => x.id === m.id)) continue;
-          next = [...next, m];
-        }
-        return next;
-      });
-    };
-    const interval = window.setInterval(poll, 1000);
-    return () => window.clearInterval(interval);
-  }, [ghostMode, roomId, user]);
-
-  // Auto-scroll
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, otherTyping]);
 
-  // Close emoji picker on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        pickerRef.current &&
-        !pickerRef.current.contains(e.target as Node)
-      ) {
-        setEmojiPickerOpen(false);
-      }
-    };
-    if (emojiPickerOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [emojiPickerOpen]);
-
-  const broadcastTyping = useCallback(
-    (typing: boolean) => {
-      if (ghostMode) return; // ghosts don't broadcast
-      const ch = typingChRef.current;
-      if (!ch || !user) return;
-      ch.send({
-        type: "broadcast",
-        event: "typing",
-        payload: { from: user.id, typing },
-      });
-    },
-    [ghostMode, user]
-  );
-
-  const onInputChange = useCallback(
-    (v: string) => {
-      setInput(v);
-      if (!isTypingRef.current) {
-        isTypingRef.current = true;
-        broadcastTyping(true);
-      }
-      if (typingTimeoutRef.current) {
-        window.clearTimeout(typingTimeoutRef.current);
-      }
-      typingTimeoutRef.current = window.setTimeout(() => {
-        isTypingRef.current = false;
-        broadcastTyping(false);
-        typingTimeoutRef.current = null;
-      }, 2000);
-    },
-    [broadcastTyping]
-  );
-
-  const handleSelectEmoji = (emoji: { native: string }) => {
-    setInput((prev) => prev + emoji.native);
-    inputRef.current?.focus();
-  };
+  function broadcastTyping(typing: boolean) {
+    const ch = typingChRef.current;
+    if (!ch || !user) return;
+    ch.send({ type: "broadcast", event: "typing", payload: { from: user.id, typing } });
+  }
+  function onInputChange(v: string) {
+    setInput(v);
+    broadcastTyping(true);
+    if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = window.setTimeout(() => broadcastTyping(false), 1500);
+  }
 
   async function send() {
     const text = input.trim();
-    if (!text || !user) return;
+    if (!text || !roomId || !user) return;
     setInput("");
-
-    if (typingTimeoutRef.current) {
-      window.clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-    if (isTypingRef.current) {
-      isTypingRef.current = false;
-      broadcastTyping(false);
-    }
-
+    broadcastTyping(false);
     if (CRISIS_RE.test(text)) setCrisis(true);
 
-    // ── GHOST MODE send: localStorage only ──────────────────────────────────
-    if (ghostMode) {
-      const newMsg: Msg = {
-        id: "ghost-" + Date.now(),
-        sender_id: user.id,
-        content: text,
-        created_at: new Date().toISOString(),
-        status: "sent",
-      };
-      setMessages((prev) => {
-        const next = [...prev, newMsg];
-        saveGhostMessages(userId, next);
-        return next;
-      });
-      return;
-    }
-
-    // ── REAL MODE send ───────────────────────────────────────────────────────
-    if (!roomId) return;
     const tempId = "local-" + Date.now();
     const optimistic: Msg = {
-      id: tempId,
-      sender_id: user.id,
-      content: text,
-      created_at: new Date().toISOString(),
-      status: "sending",
-      _local: true,
+      id: tempId, sender_id: user.id, content: text,
+      created_at: new Date().toISOString(), status: "sending", _local: true,
     };
     setMessages((prev) => [...prev, optimistic]);
 
-    const { error } = await supabase
-      .from("messages")
-      .insert({ room_id: roomId, sender_id: user.id, content: text });
+    const { error } = await supabase.from("messages").insert({ room_id: roomId, sender_id: user.id, content: text });
     if (error) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m))
-      );
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)));
       toast.error("Couldn't send");
     }
   }
 
   async function blockUser() {
-    if (!user || ghostMode) return;
-    await supabase
-      .from("blocked_users")
-      .insert({ blocker_id: user.id, blocked_id: userId });
+    if (!user) return;
+    await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: userId });
     toast.success("User blocked.");
     setMenuOpen(false);
     goBack();
   }
-
   async function reportUser(reason: string) {
-    if (!user || ghostMode) return;
-    await supabase
-      .from("reports")
-      .insert({ reporter_id: user.id, reported_id: userId, reason });
+    if (!user) return;
+    await supabase.from("reports").insert({ reporter_id: user.id, reported_id: userId, reason });
     toast.success("Report submitted.");
     setMenuOpen(false);
   }
 
   useEffect(() => {
     if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
   const myLastMessageAt = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--)
-      if (messages[i].sender_id === user?.id) return messages[i].created_at;
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].sender_id === user?.id) return messages[i].created_at;
     return null;
   }, [messages, user?.id]);
 
-  // ghost profile extras for the header
-  const ghostExtra = ghostMode ? GHOST_MAP.get(userId) : undefined;
+  const displayName = other?.name || other?.username || "";
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#0D0D0F] text-[#E8EAED]">
+    <div className="flex flex-col h-[100dvh] warm-page" style={{ background: "#141008" }}>
       {/* Top bar */}
-      <header className="h-[60px] shrink-0 px-3 flex items-center gap-3 bg-[#1A1A1F] border-b border-[rgba(255,255,255,0.06)]">
-        <button onClick={goBack} className="p-2 -ml-2" aria-label="Back">
+      <header
+        className="h-[58px] shrink-0 px-3 flex items-center gap-3"
+        style={{ background: "#1a1512", borderBottom: "0.5px solid #2e2618" }}
+      >
+        <button onClick={goBack} className="p-2 -ml-2" aria-label="Back" style={{ color: "#f0ebe4" }}>
           <ArrowLeft className="h-6 w-6" strokeWidth={1.5} />
         </button>
         {other && (
           <div className="flex-1 min-w-0 flex items-center gap-2.5">
-            <div className="relative">
-              {other.avatar_url ? (
-                <img
-                  src={other.avatar_url}
-                  alt=""
-                  loading="lazy"
-                  width={36}
-                  height={36}
-                  className="h-9 w-9 rounded-full"
-                />
-              ) : (
-                <div className="h-9 w-9 rounded-full bg-[#8AB4F8] text-[#0D0D0F] flex items-center justify-center text-sm font-semibold">
-                  {other.username[0]?.toUpperCase()}
-                </div>
-              )}
-              <span
-                className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#1A1A1F] ${isPartnerOnline ? "bg-[#4ADE80]" : "bg-[#5F6368]"}`}
-              />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-[#E8EAED] truncate leading-tight font-medium">
-                {other.username}
-                {ghostExtra && (
-                  <span className="ml-1.5 text-[11px] text-[#9AA0A6] font-normal">
-                    {ghostExtra.age} y/o · {ghostExtra.state}
-                  </span>
-                )}
-              </p>
-              <p className="text-[11px] text-[#9AA0A6] leading-tight">
-                {isPartnerOnline ? (
-                  <span className="text-[#4ADE80]">online</span>
-                ) : (
-                  "offline"
-                )}
-              </p>
+            <UserAvatar id={other.id} name={displayName} online={other.is_online} size={36} onlineRingColor="#1a1512" />
+            <div className="min-w-0 flex items-center gap-1.5">
+              <p className="text-[16px] font-semibold truncate warm-grad-text leading-tight">{displayName}</p>
+              {other.is_online && <span className="h-2 w-2 rounded-full" style={{ background: "#6dbf6a" }} />}
             </div>
           </div>
         )}
-        {!ghostMode && (
-          <button
-            onClick={() => setMenuOpen(true)}
-            className="p-2 -mr-2"
-            aria-label="More"
-          >
-            <MoreHorizontal className="h-5 w-5" strokeWidth={1.5} />
-          </button>
-        )}
+        <button onClick={() => setMenuOpen(true)} className="p-2 -mr-2" aria-label="More" style={{ color: "#f0ebe4" }}>
+          <MoreHorizontal className="h-5 w-5" strokeWidth={1.5} />
+        </button>
       </header>
 
       {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin chat-scroll"
-        style={{ paddingBottom: 16 }}
-      >
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin chat-scroll" style={{ paddingBottom: 16 }}>
         <div className="text-center my-3">
-          <span className="inline-block px-3 py-1 italic rounded-full bg-[#1A1A1F] text-[#9AA0A6] border-soft">
-            {ghostExtra
-              ? `${ghostExtra.name} is online. Say hi 🌙`
-              : "You're both up late. Say hello 🌙"}
+          <span
+            className="inline-block px-3 py-1 text-[11px] italic rounded-full"
+            style={{ background: "#201c14", color: "#8a7460", border: "0.5px solid #2e2618" }}
+          >
+            You're both up late. Say hello 🌙
           </span>
         </div>
         {messages.map((m) => (
-          <Bubble
-            key={m.id}
-            m={m}
-            mine={m.sender_id === user!.id}
-            myLastAt={myLastMessageAt}
-          />
+          <Bubble key={m.id} m={m} mine={m.sender_id === user!.id} myLastAt={myLastMessageAt} />
         ))}
-        {otherTyping && (
-        <div className="flex items-end gap-2 px-1 py-1">
-          <div className="flex items-center gap-1 bg-[#1A1A1F] rounded-2xl rounded-bl-sm px-4 py-3">
-            <span className="w-2 h-2 rounded-full bg-[#8AB4F8] animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-2 h-2 rounded-full bg-[#8AB4F8] animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-2 h-2 rounded-full bg-[#8AB4F8] animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
-        </div>
-      )}
-      {crisis && (
+        {crisis && (
           <div className="text-center my-3">
-            <span className="inline-block px-3 py-1.5 text-[11px] rounded-full bg-accent-soft text-[#8AB4F8] border border-[rgba(138,180,248,0.20)]">
+            <span
+              className="inline-block px-3 py-1.5 text-[11px] rounded-full"
+              style={{ background: "rgba(240,164,112,0.12)", color: "#f0a070", border: "0.5px solid rgba(240,164,112,0.20)" }}
+            >
               💙 iCall: 9152987821 · Vandrevala: 1860-2662-345
             </span>
+          </div>
+        )}
+        {otherTyping && (
+          <div className="flex justify-start mb-1">
+            <div className="rounded-[18px] rounded-bl-[4px] px-4 py-3 flex items-center gap-1" style={{ background: "#201c14", border: "0.5px solid #2e2618" }}>
+              <span className="h-1.5 w-1.5 rounded-full dot-bounce-1" style={{ background: "#8a7460" }} />
+              <span className="h-1.5 w-1.5 rounded-full dot-bounce-2" style={{ background: "#8a7460" }} />
+              <span className="h-1.5 w-1.5 rounded-full dot-bounce-3" style={{ background: "#8a7460" }} />
+            </div>
           </div>
         )}
       </div>
 
       {/* Input */}
       <div
-        className="shrink-0 bg-[#0D0D0F] px-3 py-2 border-t border-[rgba(255,255,255,0.06)]"
+        className="shrink-0 px-3 py-2"
         style={{
+          background: "#141008",
+          borderTop: "0.5px solid #2e2618",
           paddingBottom: `calc(env(safe-area-inset-bottom) + 8px)`,
           transform: inset ? `translateY(-${inset}px)` : undefined,
           transition: "transform 200ms ease",
         }}
       >
-        <div className="relative flex items-end gap-2 bg-[#2A2A32] rounded-[22px] pl-4 pr-1.5 py-1.5 min-h-[44px] border-soft">
-          {emojiPickerOpen && (
-            <div ref={pickerRef} className="absolute bottom-14 right-0 z-50">
-              <Picker
-                data={data}
-                onEmojiSelect={handleSelectEmoji}
-                theme="dark"
-                set="native"
-              />
-            </div>
-          )}
+        <div className="flex items-end gap-2 pl-4 pr-1.5 py-1.5 min-h-[48px] rounded-[24px]" style={{ background: "#201c14", border: "0.5px solid #332a1c" }}>
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder="Message…"
             rows={1}
             maxLength={2000}
-            className="flex-1 bg-transparent outline-none text-[16px] resize-none py-2 leading-5 placeholder:text-[#5F6368] max-h-[120px]"
+            className="flex-1 bg-transparent outline-none text-[16px] resize-none py-2 leading-5 max-h-[120px]"
+            style={{ color: "#f5f0ea" }}
           />
-          <button
-            type="button"
-            onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
-            className="h-10 w-10 flex items-center justify-center text-[#9AA0A6] hover:text-white"
-            aria-label="Choose emoji"
-          >
-            😊
-          </button>
           <button
             onClick={send}
             disabled={!input.trim()}
             aria-label="Send"
-            className={`h-10 w-10 rounded-full flex items-center justify-center transition-opacity duration-200 ${input.trim() ? "bg-[#8AB4F8] opacity-100" : "bg-[#222228] opacity-100"}`}
+            className="h-10 w-10 rounded-full flex items-center justify-center"
+            style={{
+              background: input.trim() ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a2318",
+              opacity: input.trim() ? 1 : 0.6,
+            }}
           >
-            <ArrowUp
-              className={`h-5 w-5 ${input.trim() ? "text-[#0D0D0F]" : "text-[#5F6368]"}`}
-              strokeWidth={2}
-            />
+            <ArrowUp className="h-5 w-5" style={{ color: input.trim() ? "#1a1410" : "#6e5e48" }} strokeWidth={2} />
           </button>
         </div>
       </div>
 
-      {/* Bottom sheet menu — only for real users */}
-      {menuOpen && !ghostMode && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/80 flex items-end"
-          onClick={() => setMenuOpen(false)}
-        >
+      {/* Bottom sheet menu */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60] flex items-end" style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setMenuOpen(false)}>
           <div
-            className="w-full bg-[#1A1A1F] rounded-t-3xl p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] fade-up border-t border-[rgba(255,255,255,0.08)]"
+            className="w-full rounded-t-3xl p-4 fade-up"
+            style={{ background: "#201c14", border: "0.5px solid #2e2618", paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="h-1 w-10 rounded-full bg-[#5F6368] mx-auto mb-4" />
-            <button
-              onClick={() => reportUser("Spam")}
-              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm"
-            >
-              Report spam
-            </button>
-            <button
-              onClick={() => reportUser("Harassment")}
-              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm"
-            >
-              Report harassment
-            </button>
-            <button
-              onClick={() => reportUser("Inappropriate")}
-              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm"
-            >
-              Report inappropriate
-            </button>
-            <button
-              onClick={blockUser}
-              className="w-full h-12 text-left px-3 rounded-xl hover:bg-white/5 text-sm text-[#F87171]"
-            >
-              Block this person
-            </button>
-            <button
-              onClick={() => setMenuOpen(false)}
-              className="w-full h-12 mt-2 rounded-full bg-[#0D0D0F] text-sm"
-            >
-              Cancel
-            </button>
+            <div className="h-1 w-10 rounded-full mx-auto mb-4" style={{ background: "#3e3222" }} />
+            <button onClick={() => reportUser("Spam")} className="w-full h-12 text-left px-3 rounded-xl text-sm" style={{ color: "#f5f0ea" }}>Report spam</button>
+            <button onClick={() => reportUser("Harassment")} className="w-full h-12 text-left px-3 rounded-xl text-sm" style={{ color: "#f5f0ea" }}>Report harassment</button>
+            <button onClick={() => reportUser("Inappropriate")} className="w-full h-12 text-left px-3 rounded-xl text-sm" style={{ color: "#f5f0ea" }}>Report inappropriate</button>
+            <button onClick={blockUser} className="w-full h-12 text-left px-3 rounded-xl text-sm" style={{ color: "#F87171" }}>Block this person</button>
+            <button onClick={() => setMenuOpen(false)} className="w-full h-12 mt-2 rounded-full text-sm" style={{ background: "#141008", color: "#f5f0ea" }}>Cancel</button>
           </div>
         </div>
       )}
@@ -696,56 +321,34 @@ function DMChat() {
   );
 }
 
-const Bubble = memo(function Bubble({
-  m,
-  mine,
-  myLastAt,
-}: {
-  m: Msg;
-  mine: boolean;
-  myLastAt: string | null;
-}) {
+const Bubble = memo(function Bubble({ m, mine, myLastAt }: { m: Msg; mine: boolean; myLastAt: string | null }) {
   const isMyLast = mine && myLastAt === m.created_at;
   const failed = m.status === "failed";
   const sending = m._local && m.status === "sending";
   const seen = !!m.read_at;
-  const delivered = !!m.delivered_at;
   return (
-    <div
-      className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"} transition-all duration-400 ease-in-out ${m._deleting ? "opacity-0 scale-95 max-h-0 mb-0 overflow-hidden" : ""}`}
-    >
-      <div className="max-w-[80%]">
+    <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"}`}>
+      <div className="max-w-[75%]">
         <div
-          className={`px-3.5 py-2.5 text-[15px] break-words ${
-            mine
-              ? "bg-[#8AB4F8] text-[#0D0D0F] rounded-[18px] rounded-br-[4px]"
-              : "bg-[#222228] text-[#E8EAED] rounded-[18px] rounded-bl-[4px]"
-          }`}
+          className="px-3.5 py-2.5 text-[15px] break-words"
+          style={{
+            background: mine ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#201c14",
+            color: mine ? "#1a1410" : "#f5f0ea",
+            border: mine ? "none" : "0.5px solid #2e2618",
+            borderRadius: mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+            opacity: sending ? 0.7 : 1,
+          }}
         >
           {m.content}
         </div>
-        <div
-          className={`mt-0.5 flex items-center gap-1 text-[11px] text-[#5F6368] ${mine ? "justify-end" : "justify-start"}`}
-        >
+        <div className={`mt-0.5 flex items-center gap-1 text-[10px] ${mine ? "justify-end" : "justify-start"}`} style={{ color: "#5e5040" }}>
           <span>{fmtTime(m.created_at)}</span>
-          {mine &&
-            (failed ? (
-              <span className="text-[#F87171]">failed</span>
-            ) : sending ? (
-              <span className="text-[#5F6368]">…</span>
-            ) : isMyLast && seen ? (
-              <CheckCheck
-                className="h-3 w-3 text-[#8AB4F8]"
-                strokeWidth={2}
-              />
-            ) : isMyLast && delivered ? (
-              <CheckCheck
-                className="h-3 w-3 text-[#5F6368]"
-                strokeWidth={2}
-              />
-            ) : isMyLast ? (
-              <Check className="h-3 w-3 text-[#5F6368]" strokeWidth={2} />
-            ) : null)}
+          {mine && (
+            failed ? <span style={{ color: "#F87171" }}>failed</span>
+            : sending ? <span>…</span>
+            : isMyLast && seen ? <span style={{ color: "#8a7460" }}>seen</span>
+            : null
+          )}
         </div>
       </div>
     </div>
