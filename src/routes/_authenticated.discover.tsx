@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { UserAvatar } from "@/components/UserAvatar";
-import { Button } from "@/components/ui/button";
+import { supabase } from "../lib/supabase";
+import { UserAvatar } from "../components/UserAvatar";
+import { Button } from "../components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/discover")({
   component: DiscoverComponent,
@@ -24,7 +24,6 @@ function DiscoverComponent() {
 
   useEffect(() => {
     async function fetchProfiles() {
-      // Pulls absolutely everyone from your Supabase profiles database table
       let query = supabase.from("profiles").select("id,username,name,age,city,state,is_online");
       
       const { data, error } = await query;
@@ -39,7 +38,6 @@ function DiscoverComponent() {
     if (filter === "online") {
       return profiles.filter((p) => p.is_online);
     }
-    // "Everyone" tab shows all records, sorting online users to the top
     return [...profiles].sort((a, b) => (b.is_online ? 1 : 0) - (a.is_online ? 1 : 0));
   }, [profiles, filter]);
 
