@@ -1,0 +1,12 @@
+# ShhChats
+
+> Late night anonymous chat for the curious mind. Connect instantly with real people when you can't sleep — free, private, judgment-free.
+
+ShhChats is an anonymous chat app for late-night conversations. Users sign up with a display name, age, and location, then get matched with other awake users in real time. No phone number, no email verification, no data selling.
+
+## Pages
+
+- [Home](/): Landing page describing the service and how matching works.
+- [Safety](/safety): Community guidelines, reporting flow, and how we keep ShhChats safe.
+- [Privacy](/privacy): Privacy policy — what we collect, how we use it, retention, and user rights.
+- [Contact](/contact): Get in touch with the ShhChats team.
