@@ -83,10 +83,12 @@ function DMChat() {
   const [crisis, setCrisis] = useState(false);
   const [imgPreview, setImgPreview] = useState<string | null>(null); // base64 preview before send
   const [imgSending, setImgSending] = useState(false);
+  const [showImgMenu, setShowImgMenu] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const typingTimerRef = useRef<number | null>(null);
   const inset = useKeyboardInset();
@@ -429,7 +431,7 @@ function DMChat() {
         }}
       >
         <div className="flex items-end gap-2 pl-3 pr-1.5 py-1.5 min-h-[48px] rounded-[24px]" style={{ background: "#201c14", border: "0.5px solid #332a1c" }}>
-          {/* Hidden file input */}
+          {/* Hidden gallery input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -437,9 +439,18 @@ function DMChat() {
             className="hidden"
             onChange={pickImage}
           />
+          {/* Hidden camera input */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={pickImage}
+          />
           {/* Image picker button */}
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setShowImgMenu(true)}
             className="shrink-0 h-9 w-9 rounded-full flex items-center justify-center"
             style={{ color: "#6e5e48" }}
             aria-label="Send image"
@@ -487,6 +498,46 @@ function DMChat() {
             <button onClick={() => reportUser("Inappropriate")} className="w-full h-12 text-left px-3 rounded-xl text-sm" style={{ color: "#f5f0ea" }}>Report inappropriate</button>
             <button onClick={blockUser} className="w-full h-12 text-left px-3 rounded-xl text-sm" style={{ color: "#F87171" }}>Block this person</button>
             <button onClick={() => setMenuOpen(false)} className="w-full h-12 mt-2 rounded-full text-sm" style={{ background: "#141008", color: "#f5f0ea" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Camera / Gallery chooser */}
+      {showImgMenu && (
+        <div
+          className="fixed inset-0 z-[70]"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+          onClick={() => setShowImgMenu(false)}
+        >
+          <div
+            className="absolute bottom-0 left-0 right-0 rounded-t-[24px] p-5 pb-10"
+            style={{ background: "#1c1610", border: "1px solid #3a2e1e" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full" style={{ background: "#3a2e1e" }} />
+            </div>
+            <p className="text-[13px] font-semibold mb-4 px-1" style={{ color: "#8a7460" }}>Send a photo</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setShowImgMenu(false); setTimeout(() => cameraInputRef.current?.click(), 100); }}
+                className="flex flex-col items-center gap-2 py-5 rounded-[18px]"
+                style={{ background: "#231d13", border: "0.5px solid #33291a" }}
+              >
+                <span className="text-[32px] leading-none">📷</span>
+                <span className="text-[14px] font-semibold" style={{ color: "#f5f0ea" }}>Camera</span>
+                <span className="text-[11px]" style={{ color: "#6e5e48" }}>Take a photo</span>
+              </button>
+              <button
+                onClick={() => { setShowImgMenu(false); setTimeout(() => fileInputRef.current?.click(), 100); }}
+                className="flex flex-col items-center gap-2 py-5 rounded-[18px]"
+                style={{ background: "#231d13", border: "0.5px solid #33291a" }}
+              >
+                <span className="text-[32px] leading-none">🖼️</span>
+                <span className="text-[14px] font-semibold" style={{ color: "#f5f0ea" }}>Gallery</span>
+                <span className="text-[11px]" style={{ color: "#6e5e48" }}>Pick from photos</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
