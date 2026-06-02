@@ -102,7 +102,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const run = async () => { try { await (supabase.rpc as unknown as (n: string) => Promise<unknown>)("cleanup_old_messages"); } catch (_) {} };
     run();
-    const id = setInterval(run, 30_000);
+    const id = setInterval(run, 60_000);
     return () => clearInterval(id);
   }, [user]);
 

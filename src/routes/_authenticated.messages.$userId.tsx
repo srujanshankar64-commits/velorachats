@@ -103,37 +103,9 @@ function DMChat() {
   useEffect(() => {
     if (!roomId || !user) return;
 
-    // Message channel
-    const msgCh = supabase
-      .channel(`room:${roomId}`, { config: { broadcast: { self: false } } })
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
-        (payload) => {
-          const m = payload.new as Msg;
-          setMessages((prev) => {
-            const idx = prev.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
-            if (idx >= 0) {
-              const copy = prev.slice();
-              copy[idx] = m;
-              return copy;
-            }
-            if (prev.some((x) => x.id === m.id)) return prev;
-            return [...prev, m];
-          });
-          if (m.sender_id !== user.id) {
-            markRead(userId);
-            supabase.from("messages")
-              .update({ read_at: new Date().toISOString() })
-              .eq("id", m.id)
-              .then(() => {});
-          }
-        })
-      .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
-        (payload) => {
-          const m = payload.new as Msg;
-          setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
-        })
+    // 1. Typing channel — broadcast only
+    const typingCh = supabase
+      .channel(`typing:${roomId}`, { config: { broadcast: { self: false } } })
       .on("broadcast", { event: "typing" }, (payload) => {
         const p = payload.payload as { from: string; typing: boolean };
         if (p.from === userId) {
@@ -143,7 +115,11 @@ function DMChat() {
       })
       .subscribe();
 
-    typingChRef.current = msgCh;
+    typingChRef.current = typingCh;
+
+    // 2. Messages DB channel — postgres_changes only
+    const msgCh = supabase
+      .channel(`messages:${roomId}`)
 
     // Online status: live subscription on profiles table
     const onlineCh = supabase
@@ -172,6 +148,8 @@ function DMChat() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      typingCh.unsubscribe();
+      typingCh.unsubscribe();
       msgCh.unsubscribe();
       onlineCh.unsubscribe();
       typingChRef.current = null;
