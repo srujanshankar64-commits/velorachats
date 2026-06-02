@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowUp, Image, MoreHorizontal, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useUnread } from "@/lib/unread";
@@ -27,14 +27,44 @@ type Msg = {
   read_at?: string | null;
   delivered_at?: string | null;
   status?: string;
+  is_image?: boolean;
   _local?: boolean;
 };
 type Other = { id: string; username: string; name: string | null; is_online: boolean };
 
 const CRISIS_RE = /\b(suicide|kill myself|end it|hurt myself|want to die)\b/i;
+const MAX_IMG_SIZE = 1.5 * 1024 * 1024; // 1.5 MB limit after compression
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+// Compress image to base64, max 800px wide, quality 0.7
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = document.createElement("img");
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 800;
+      let { width, height } = img;
+      if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      const base64 = canvas.toDataURL("image/jpeg", 0.7);
+      if (base64.length > MAX_IMG_SIZE * 1.4) {
+        // Try lower quality
+        resolve(canvas.toDataURL("image/jpeg", 0.4));
+      } else {
+        resolve(base64);
+      }
+    };
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = url;
+  });
 }
 
 function DMChat() {
@@ -51,9 +81,12 @@ function DMChat() {
   const [otherTyping, setOtherTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [crisis, setCrisis] = useState(false);
+  const [imgPreview, setImgPreview] = useState<string | null>(null); // base64 preview before send
+  const [imgSending, setImgSending] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const typingTimerRef = useRef<number | null>(null);
   const inset = useKeyboardInset();
@@ -80,7 +113,7 @@ function DMChat() {
 
       const { data: msgs } = await supabase
         .from("messages")
-        .select("id,sender_id,content,created_at,read_at,delivered_at,status")
+        .select("id,sender_id,content,created_at,read_at,delivered_at,status,is_image")
         .eq("room_id", rid as string)
         .order("created_at")
         .limit(100);
@@ -88,7 +121,6 @@ function DMChat() {
       if (msgs) setMessages(msgs as Msg[]);
       markRead(userId);
 
-      // Mark all received messages as read
       await supabase
         .from("messages")
         .update({ read_at: new Date().toISOString() })
@@ -99,11 +131,10 @@ function DMChat() {
     return () => { active = false; };
   }, [userId, user, markRead]);
 
-  // Real-time: messages + typing + online status
+  // Real-time
   useEffect(() => {
     if (!roomId || !user) return;
 
-    // 1. Typing channel — broadcast only
     const typingCh = supabase
       .channel(`typing:${roomId}`, { config: { broadcast: { self: false } } })
       .on("broadcast", { event: "typing" }, (payload) => {
@@ -114,10 +145,8 @@ function DMChat() {
         }
       })
       .subscribe();
-
     typingChRef.current = typingCh;
 
-    // 2. Messages DB channel — postgres_changes only
     const msgCh = supabase
       .channel(`messages:${roomId}`)
       .on("postgres_changes",
@@ -126,16 +155,13 @@ function DMChat() {
           const m = payload.new as Msg;
           setMessages((prev) => {
             const idx = prev.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
-            if (idx >= 0) {
-              const copy = prev.slice();
-              copy[idx] = m;
-              return copy;
-            }
+            if (idx >= 0) { const copy = prev.slice(); copy[idx] = m; return copy; }
             if (prev.some((x) => x.id === m.id)) return prev;
             return [...prev, m];
           });
           if (m.sender_id !== user.id) {
             markRead(userId);
+            // Mark as read immediately → triggers DB delete for images
             supabase.from("messages")
               .update({ read_at: new Date().toISOString() })
               .eq("id", m.id)
@@ -148,9 +174,15 @@ function DMChat() {
           const m = payload.new as Msg;
           setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
         })
+      .on("postgres_changes",
+        // ✅ Listen for DELETE — remove image from UI when DB trigger deletes it
+        { event: "DELETE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const deleted = payload.old as { id: string };
+          setMessages((prev) => prev.filter((x) => x.id !== deleted.id));
+        })
       .subscribe();
 
-    // Online status: live subscription on profiles table
     const onlineCh = supabase
       .channel(`presence:${userId}`)
       .on("postgres_changes",
@@ -161,12 +193,10 @@ function DMChat() {
         })
       .subscribe();
 
-    // Mark user as online
     if (user) {
       supabase.from("profiles").update({ is_online: true, last_seen: new Date().toISOString() }).eq("id", user.id).then(() => {});
     }
 
-    // Mark offline on tab close
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         supabase.from("profiles").update({ is_online: false, last_seen: new Date().toISOString() }).eq("id", user.id).then(() => {});
@@ -185,7 +215,6 @@ function DMChat() {
     };
   }, [roomId, user, userId, markRead]);
 
-  // Auto scroll to bottom
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -221,14 +250,58 @@ function DMChat() {
     const { data, error } = await supabase
       .from("messages")
       .insert({ room_id: roomId, sender_id: user.id, content: text })
-      .select("id,sender_id,content,created_at,read_at,delivered_at,status")
+      .select("id,sender_id,content,created_at,read_at,delivered_at,status,is_image")
       .single();
 
     if (error) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)));
       toast.error("Couldn't send");
     } else if (data) {
-      // Replace optimistic message with real one immediately
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? (data as Msg) : m)));
+    }
+  }
+
+  // Pick image from gallery
+  async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Please pick an image");
+    if (file.size > 10 * 1024 * 1024) return toast.error("Image too large (max 10MB)");
+
+    try {
+      const base64 = await compressImage(file);
+      setImgPreview(base64);
+    } catch {
+      toast.error("Couldn't load image");
+    }
+    // Reset input so same file can be picked again
+    e.target.value = "";
+  }
+
+  // Send the previewed image
+  async function sendImage() {
+    if (!imgPreview || !roomId || !user) return;
+    setImgSending(true);
+
+    const tempId = "local-img-" + Date.now();
+    const optimistic: Msg = {
+      id: tempId, sender_id: user.id, content: imgPreview,
+      created_at: new Date().toISOString(), status: "sending", is_image: true, _local: true,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setImgPreview(null);
+
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({ room_id: roomId, sender_id: user.id, content: imgPreview, is_image: true })
+      .select("id,sender_id,content,created_at,read_at,delivered_at,status,is_image")
+      .single();
+
+    setImgSending(false);
+    if (error) {
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)));
+      toast.error("Couldn't send image");
+    } else if (data) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? (data as Msg) : m)));
     }
   }
@@ -267,10 +340,7 @@ function DMChat() {
   return (
     <div className="flex flex-col h-[100dvh] warm-page" style={{ background: "#141008" }}>
       {/* Top bar */}
-      <header
-        className="h-[58px] shrink-0 px-3 flex items-center gap-3"
-        style={{ background: "#1a1512", borderBottom: "0.5px solid #2e2618" }}
-      >
+      <header className="h-[58px] shrink-0 px-3 flex items-center gap-3" style={{ background: "#1a1512", borderBottom: "0.5px solid #2e2618" }}>
         <button onClick={goBack} className="p-2 -ml-2" aria-label="Back" style={{ color: "#f0ebe4" }}>
           <ArrowLeft className="h-6 w-6" strokeWidth={1.5} />
         </button>
@@ -293,10 +363,7 @@ function DMChat() {
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin chat-scroll" style={{ paddingBottom: 16 }}>
         <div className="text-center my-3">
-          <span
-            className="inline-block px-3 py-1 text-[11px] italic rounded-full"
-            style={{ background: "#201c14", color: "#8a7460", border: "0.5px solid #2e2618" }}
-          >
+          <span className="inline-block px-3 py-1 text-[11px] italic rounded-full" style={{ background: "#201c14", color: "#8a7460", border: "0.5px solid #2e2618" }}>
             You're both up late. Say hello 🌙
           </span>
         </div>
@@ -305,10 +372,7 @@ function DMChat() {
         ))}
         {crisis && (
           <div className="text-center my-3">
-            <span
-              className="inline-block px-3 py-1.5 text-[11px] rounded-full"
-              style={{ background: "rgba(240,164,112,0.12)", color: "#f0a070", border: "0.5px solid rgba(240,164,112,0.20)" }}
-            >
+            <span className="inline-block px-3 py-1.5 text-[11px] rounded-full" style={{ background: "rgba(240,164,112,0.12)", color: "#f0a070", border: "0.5px solid rgba(240,164,112,0.20)" }}>
               💙 iCall: 9152987821 · Vandrevala: 1860-2662-345
             </span>
           </div>
@@ -324,7 +388,36 @@ function DMChat() {
         )}
       </div>
 
-      {/* Input */}
+      {/* Image preview before send */}
+      {imgPreview && (
+        <div className="shrink-0 px-3 pb-2">
+          <div className="relative inline-block rounded-[16px] overflow-hidden" style={{ border: "0.5px solid #3a2e1e" }}>
+            <img src={imgPreview} alt="Preview" className="max-h-[160px] max-w-[240px] object-cover block" />
+            <button
+              onClick={() => setImgPreview(null)}
+              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(0,0,0,0.6)" }}
+            >
+              <X className="w-3.5 h-3.5" style={{ color: "#fff" }} />
+            </button>
+            <div className="absolute bottom-0 left-0 right-0 px-3 py-2 flex justify-end" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)" }}>
+              <button
+                onClick={sendImage}
+                disabled={imgSending}
+                className="h-8 w-8 rounded-full flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg, #ffffff, #f0e8dc)" }}
+              >
+                <ArrowUp className="h-4 w-4" style={{ color: "#1a1410" }} strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
+          <p className="text-[11px] mt-1" style={{ color: "#6e5e48" }}>
+            🔥 Disappears after your friend sees it
+          </p>
+        </div>
+      )}
+
+      {/* Input bar */}
       <div
         className="shrink-0 px-3 py-2"
         style={{
@@ -335,7 +428,25 @@ function DMChat() {
           transition: "transform 200ms ease",
         }}
       >
-        <div className="flex items-end gap-2 pl-4 pr-1.5 py-1.5 min-h-[48px] rounded-[24px]" style={{ background: "#201c14", border: "0.5px solid #332a1c" }}>
+        <div className="flex items-end gap-2 pl-3 pr-1.5 py-1.5 min-h-[48px] rounded-[24px]" style={{ background: "#201c14", border: "0.5px solid #332a1c" }}>
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={pickImage}
+          />
+          {/* Image picker button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 h-9 w-9 rounded-full flex items-center justify-center"
+            style={{ color: "#6e5e48" }}
+            aria-label="Send image"
+          >
+            <Image className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+
           <textarea
             ref={inputRef}
             value={input}
@@ -351,7 +462,7 @@ function DMChat() {
             onClick={send}
             disabled={!input.trim()}
             aria-label="Send"
-            className="h-10 w-10 rounded-full flex items-center justify-center"
+            className="h-10 w-10 rounded-full flex items-center justify-center shrink-0"
             style={{
               background: input.trim() ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#2a2318",
               opacity: input.trim() ? 1 : 0.6,
@@ -393,18 +504,47 @@ const Bubble = memo(function Bubble({ m, mine, myLastSentId }: { m: Msg; mine: b
   return (
     <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[75%]">
-        <div
-          className="px-3.5 py-2.5 text-[15px] break-words"
-          style={{
-            background: mine ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#201c14",
-            color: mine ? "#1a1410" : "#f5f0ea",
-            border: mine ? "none" : "0.5px solid #2e2618",
-            borderRadius: mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-            opacity: sending ? 0.7 : 1,
-          }}
-        >
-          {m.content}
-        </div>
+        {m.is_image ? (
+          // Image bubble
+          <div
+            className="overflow-hidden"
+            style={{
+              borderRadius: mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+              border: mine ? "none" : "0.5px solid #2e2618",
+              opacity: sending ? 0.7 : 1,
+              position: "relative",
+            }}
+          >
+            <img
+              src={m.content}
+              alt="Photo"
+              className="block max-w-[220px] max-h-[280px] object-cover"
+              style={{ display: "block" }}
+            />
+            {!mine && (
+              <div
+                className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px]"
+                style={{ background: "rgba(0,0,0,0.5)", color: "rgba(255,255,255,0.7)" }}
+              >
+                🔥 Disappears after you see this
+              </div>
+            )}
+          </div>
+        ) : (
+          // Text bubble
+          <div
+            className="px-3.5 py-2.5 text-[15px] break-words"
+            style={{
+              background: mine ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#201c14",
+              color: mine ? "#1a1410" : "#f5f0ea",
+              border: mine ? "none" : "0.5px solid #2e2618",
+              borderRadius: mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+              opacity: sending ? 0.7 : 1,
+            }}
+          >
+            {m.content}
+          </div>
+        )}
         <div className={`mt-0.5 flex items-center gap-1 text-[10px] ${mine ? "justify-end" : "justify-start"}`} style={{ color: "#5e5040" }}>
           <span>{fmtTime(m.created_at)}</span>
           {mine && isMyLast && (
@@ -413,6 +553,9 @@ const Bubble = memo(function Bubble({ m, mine, myLastSentId }: { m: Msg; mine: b
             : seen ? <span style={{ color: "#6dbf6a" }}>✓✓ seen</span>
             : delivered ? <span style={{ color: "#8a7460" }}>✓✓ delivered</span>
             : <span style={{ color: "#8a7460" }}>✓ sent</span>
+          )}
+          {m.is_image && mine && !sending && (
+            <span style={{ color: "#8a7460" }}>· 🔥 ephemeral</span>
           )}
         </div>
       </div>
