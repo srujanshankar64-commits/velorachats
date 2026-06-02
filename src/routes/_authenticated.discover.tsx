@@ -197,88 +197,121 @@ function Discover() {
       </div>
 
       {/* Filter bottom sheet */}
-      {showFilters && (
-        <div
-          className="fixed inset-0 z-[100]"
-          style={{ background: "rgba(0,0,0,0.55)" }}
-          onClick={() => setShowFilters(false)}
-        >
-          <div
-            className="absolute bottom-0 left-0 right-0 rounded-t-[28px] p-6 pb-12"
-            style={{ background: "#1c1610", border: "1px solid #3a2e1e" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Handle */}
-            <div className="flex justify-center mb-5">
-              <div className="w-10 h-1 rounded-full" style={{ background: "#3a2e1e" }} />
-            </div>
+      <FilterSheet
+        open={showFilters}
+        genderFilter={genderFilter}
+        ageMin={ageMin}
+        ageMax={ageMax}
+        onGenderChange={setGenderFilter}
+        onAgeMinChange={setAgeMin}
+        onAgeMaxChange={setAgeMax}
+        onReset={() => { setGenderFilter("all"); setAgeMin(18); setAgeMax(60); }}
+        onApply={() => setShowFilters(false)}
+        onClose={() => setShowFilters(false)}
+      />
+    </div>
+  );
+}
 
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-[18px] font-bold" style={{ color: "#f5f0ea" }}>Filter People</span>
-              <button
-                onClick={() => { setGenderFilter("all"); setAgeMin(18); setAgeMax(60); }}
-                className="text-[13px] px-3 py-1 rounded-[10px]"
-                style={{ color: "#8a7460", background: "#2a2318", border: "0.5px solid #3e3222" }}
-              >
-                Reset
-              </button>
-            </div>
+function FilterSheet({ open, genderFilter, ageMin, ageMax, onGenderChange, onAgeMinChange, onAgeMaxChange, onReset, onApply, onClose }: {
+  open: boolean; genderFilter: "all"|"male"|"female"; ageMin: number; ageMax: number;
+  onGenderChange: (v: "all"|"male"|"female") => void; onAgeMinChange: (v: number) => void;
+  onAgeMaxChange: (v: number) => void; onReset: () => void; onApply: () => void; onClose: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [animIn, setAnimIn] = useState(false);
 
-            {/* Gender cards */}
-            <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "#5e5040" }}>Show me</p>
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              {([
-                { val: "all",    label: "Everyone", emoji: "👥" },
-                { val: "male",   label: "Males",    emoji: "👦" },
-                { val: "female", label: "Females",  emoji: "👧" },
-              ] as const).map(({ val, label, emoji }) => {
-                const active = genderFilter === val;
-                return (
-                  <button
-                    key={val}
-                    onClick={() => { setGenderFilter(val); setShowFilters(false); }}
-                    className="flex flex-col items-center gap-1.5 py-4 rounded-[18px]"
-                    style={{
-                      background: active ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#231d13",
-                      border: active ? "none" : "0.5px solid #33291a",
-                      transform: active ? "scale(1.03)" : "scale(1)",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    <span className="text-[26px] leading-none">{emoji}</span>
-                    <span className="text-[13px] font-semibold" style={{ color: active ? "#1a1410" : "#8a7460" }}>{label}</span>
-                    {active && <span className="text-[10px]" style={{ color: "#3a8a38" }}>✓ Active</span>}
-                  </button>
-                );
-              })}
-            </div>
+  useEffect(() => {
+    if (open) {
+      setVisible(true);
+      requestAnimationFrame(() => requestAnimationFrame(() => setAnimIn(true)));
+    } else {
+      setAnimIn(false);
+      const t = setTimeout(() => setVisible(false), 350);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
 
-            {/* Age range */}
-            <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "#5e5040" }}>Age Range</p>
-            <div className="rounded-[16px] p-4 mb-6" style={{ background: "#231d13", border: "0.5px solid #33291a" }}>
-              <div className="flex justify-between mb-3">
-                <span className="text-[14px]" style={{ color: "#f5f0ea" }}>Between</span>
-                <span className="text-[14px] font-semibold" style={{ color: "#f0e8dc" }}>{ageMin} – {ageMax} yrs</span>
-              </div>
-              <input type="range" min={18} max={60} value={ageMin}
-                onChange={(e) => setAgeMin(Math.min(+e.target.value, ageMax - 1))}
-                className="w-full accent-[#f0e8dc] mb-2" />
-              <input type="range" min={18} max={60} value={ageMax}
-                onChange={(e) => setAgeMax(Math.max(+e.target.value, ageMin + 1))}
-                className="w-full accent-[#f0e8dc]" />
-            </div>
+  function close(cb: () => void) {
+    setAnimIn(false);
+    setTimeout(() => { setVisible(false); cb(); }, 340);
+  }
 
-            <button
-              onClick={() => setShowFilters(false)}
-              className="w-full py-3.5 rounded-[16px] text-[15px] font-bold"
-              style={{ background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410" }}
-            >
-              Apply
-            </button>
-          </div>
+  if (!visible) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end"
+      style={{ background: animIn ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0)", transition: "background 0.35s ease" }}
+      onClick={() => close(onClose)}>
+      <div className="w-full rounded-t-[28px] p-5"
+        style={{
+          background: "#1c1610", border: "1px solid #3a2e1e",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)",
+          transform: animIn ? "translateY(0)" : "translateY(100%)",
+          transition: "transform 0.38s cubic-bezier(0.32, 0.72, 0, 1)",
+        }}
+        onClick={(e) => e.stopPropagation()}>
+
+        {/* Handle */}
+        <div className="flex justify-center mb-4">
+          <div className="w-9 h-1 rounded-full" style={{ background: "#3a2e1e" }} />
         </div>
-      )}
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <span className="text-[17px] font-bold" style={{ color: "#f5f0ea" }}>Filter People</span>
+          <button onClick={onReset} className="text-[13px] px-3 py-1 rounded-full"
+            style={{ color: "#8a7460", background: "#2a2318", border: "0.5px solid #3e3222" }}>
+            Reset
+          </button>
+        </div>
+
+        {/* Gender — pill row */}
+        <p className="text-[11px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: "#5e5040" }}>Show me</p>
+        <div className="flex gap-2 mb-5">
+          {([
+            { val: "all" as const, label: "Everyone", emoji: "👥" },
+            { val: "male" as const, label: "Males", emoji: "👦" },
+            { val: "female" as const, label: "Females", emoji: "👧" },
+          ]).map(({ val, label, emoji }) => {
+            const active = genderFilter === val;
+            return (
+              <button key={val} onClick={() => onGenderChange(val)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[13px] font-semibold"
+                style={{
+                  background: active ? "linear-gradient(135deg, #ffffff, #f0e8dc)" : "#231d13",
+                  border: active ? "none" : "0.5px solid #33291a",
+                  color: active ? "#1a1410" : "#8a7460",
+                  transition: "all 0.18s ease",
+                }}>
+                <span className="text-[16px] leading-none">{emoji}</span>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Age range */}
+        <p className="text-[11px] font-semibold uppercase tracking-widest mb-2.5" style={{ color: "#5e5040" }}>Age Range</p>
+        <div className="rounded-[20px] p-4 mb-5" style={{ background: "#231d13", border: "0.5px solid #33291a" }}>
+          <div className="flex justify-between mb-3">
+            <span className="text-[13px]" style={{ color: "#8a7460" }}>Between</span>
+            <span className="text-[13px] font-semibold" style={{ color: "#f0e8dc" }}>{ageMin} – {ageMax} yrs</span>
+          </div>
+          <input type="range" min={18} max={60} value={ageMin}
+            onChange={(e) => onAgeMinChange(Math.min(+e.target.value, ageMax - 1))}
+            className="w-full accent-[#f0e8dc] mb-2" />
+          <input type="range" min={18} max={60} value={ageMax}
+            onChange={(e) => onAgeMaxChange(Math.max(+e.target.value, ageMin + 1))}
+            className="w-full accent-[#f0e8dc]" />
+        </div>
+
+        {/* Apply */}
+        <button onClick={() => close(onApply)} className="w-full py-3.5 rounded-full text-[15px] font-bold"
+          style={{ background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410" }}>
+          Apply Filters
+        </button>
+      </div>
     </div>
   );
 }
