@@ -10,14 +10,39 @@ const SITE = "https://shhchats.in";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ShhChats — Late night conversations" },
-      { name: "description", content: "ShhChats — late night anonymous chat. Talk to a real person when your mind won't stop. Free and anonymous." },
-      { property: "og:title", content: "ShhChats — Late night conversations" },
-      { property: "og:description", content: "Late night anonymous chat. Real people. Real conversations." },
+      { title: "ShhChats — Late night anonymous chat with real people" },
+      { name: "description", content: "Late night anonymous chat for the curious mind. Talk to a real person instantly when you can't sleep — 100% free, private, and judgment-free." },
+      { property: "og:title", content: "ShhChats — Late night anonymous chat" },
+      { property: "og:description", content: "Talk to a real person when your mind won't stop. Free, anonymous, judgment-free." },
+      { property: "og:type", content: "website" },
       { property: "og:url", content: SITE + "/" },
       { name: "twitter:url", content: SITE + "/" },
     ],
     links: [{ rel: "canonical", href: SITE + "/" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              name: "ShhChats",
+              url: SITE + "/",
+              logo: SITE + "/favicon.svg",
+              sameAs: [],
+              description: "ShhChats is an anonymous late-night chat app that matches awake users in real time.",
+            },
+            {
+              "@type": "WebSite",
+              name: "ShhChats",
+              url: SITE + "/",
+              description: "Late night anonymous chat with real people. Free, private, judgment-free.",
+            },
+          ],
+        }),
+      },
+    ],
   }),
   component: Landing,
 });
