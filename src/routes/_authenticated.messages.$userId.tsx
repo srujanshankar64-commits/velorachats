@@ -84,13 +84,13 @@ function DMChat() {
   const [imgPreview, setImgPreview] = useState<string | null>(null); // base64 preview before send
   const [imgSending, setImgSending] = useState(false);
   const [showImgMenu, setShowImgMenu] = useState(false);
-
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const typingChRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const typingTimerRef = useRef<number | null>(null);
+  const otherTypingTimerRef = useRef<number | null>(null);
   const inset = useKeyboardInset();
   useSwipeBack(goBack);
 
@@ -133,28 +133,19 @@ function DMChat() {
     return () => { active = false; };
   }, [userId, user, markRead]);
 
-  // Real-time
+  // Real-time: messages + typing + online status
   useEffect(() => {
     if (!roomId || !user) return;
 
-    const typingCh = supabase
-      .channel(`typing:${roomId}`, { config: { broadcast: { self: false } } })
-      .on("broadcast", { event: "typing" }, (payload) => {
-        const p = payload.payload as { from: string; typing: boolean };
-        if (p.from === userId) {
-          setOtherTyping(p.typing);
-          if (p.typing) window.setTimeout(() => setOtherTyping(false), 2500);
-        }
-      })
-      .subscribe();
-    typingChRef.current = typingCh;
-
+    // Single unified channel for messages (with client-side filtering) and typing broadcast
     const msgCh = supabase
-      .channel(`messages:${roomId}`)
+      .channel(`room:${roomId}`, { config: { broadcast: { self: false } } })
       .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+        { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const m = payload.new as Msg;
+          if (m.room_id !== roomId) return;
+
           setMessages((prev) => {
             const idx = prev.findIndex((x) => x._local && x.sender_id === m.sender_id && x.content === m.content);
             if (idx >= 0) { const copy = prev.slice(); copy[idx] = m; return copy; }
@@ -171,19 +162,32 @@ function DMChat() {
           }
         })
       .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+        { event: "UPDATE", schema: "public", table: "messages" },
         (payload) => {
           const m = payload.new as Msg;
+          if (m.room_id !== roomId) return;
           setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
         })
       .on("postgres_changes",
-        // ✅ Listen for DELETE — remove image from UI when DB trigger deletes it
-        { event: "DELETE", schema: "public", table: "messages", filter: `room_id=eq.${roomId}` },
+        { event: "DELETE", schema: "public", table: "messages" },
         (payload) => {
           const deleted = payload.old as { id: string };
+          // Check if deleted message was in our state (safest to filter by ID)
           setMessages((prev) => prev.filter((x) => x.id !== deleted.id));
         })
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const p = payload.payload as { from: string; typing: boolean };
+        if (p.from === userId) {
+          setOtherTyping(p.typing);
+          if (otherTypingTimerRef.current) window.clearTimeout(otherTypingTimerRef.current);
+          if (p.typing) {
+            otherTypingTimerRef.current = window.setTimeout(() => setOtherTyping(false), 2500);
+          }
+        }
+      })
       .subscribe();
+
+    typingChRef.current = msgCh;
 
     const onlineCh = supabase
       .channel(`presence:${userId}`)
@@ -209,11 +213,11 @@ function DMChat() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      typingCh.unsubscribe();
       msgCh.unsubscribe();
       onlineCh.unsubscribe();
       typingChRef.current = null;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (otherTypingTimerRef.current) window.clearTimeout(otherTypingTimerRef.current);
     };
   }, [roomId, user, userId, markRead]);
 
@@ -302,7 +306,7 @@ function DMChat() {
     setImgSending(false);
     if (error) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)));
-      toast.error("Couldn't send image");
+      toast.error(`Couldn't send image: ${error.message}`);
     } else if (data) {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? (data as Msg) : m)));
     }
