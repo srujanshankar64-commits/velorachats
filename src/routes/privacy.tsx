@@ -7,8 +7,10 @@ export const Route = createFileRoute("/privacy")({
   head: () => ({
     meta: [
       { title: "Privacy — ShhChats" },
-      { name: "description", content: "ShhChats privacy policy." },
+      { name: "description", content: "How ShhChats handles your data: what we collect, how messages are stored, retention, cookies, and your rights as a user." },
       { property: "og:title", content: "Privacy — ShhChats" },
+      { property: "og:description", content: "How ShhChats handles your data — collection, retention, cookies, and your rights." },
+      { property: "og:type", content: "website" },
       { property: "og:url", content: SITE + "/privacy" },
       { name: "twitter:url", content: SITE + "/privacy" },
     ],

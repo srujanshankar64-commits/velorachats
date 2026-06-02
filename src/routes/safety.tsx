@@ -5,9 +5,10 @@ export const Route = createFileRoute("/safety")({
   head: () => ({
     meta: [
       { title: "Safety at ShhChats" },
-      { name: "description", content: "Community guidelines, reporting, and privacy at ShhChats." },
+      { name: "description", content: "ShhChats community guidelines, how to report abuse, moderation timelines, and the privacy controls that keep late-night chats safe." },
       { property: "og:title", content: "Safety at ShhChats" },
-      { property: "og:description", content: "How we keep ShhChats safe and private." },
+      { property: "og:description", content: "Community guidelines, reporting, and privacy controls at ShhChats." },
+      { property: "og:type", content: "website" },
       { property: "og:url", content: "https://shhchats.in/safety" },
     ],
     links: [{ rel: "canonical", href: "https://shhchats.in/safety" }],

@@ -9,8 +9,13 @@ export const Route = createFileRoute("/contact")({
   head: () => ({
     meta: [
       { title: "Contact Us — ShhChats" },
-      { name: "description", content: "Get in touch with the ShhChats team." },
+      { name: "description", content: "Reach the ShhChats team for support, safety reports, partnerships, or general feedback about the late-night anonymous chat app." },
+      { property: "og:title", content: "Contact Us — ShhChats" },
+      { property: "og:description", content: "Reach the ShhChats team for support, safety reports, or feedback." },
+      { property: "og:url", content: "https://shhchats.in/contact" },
+      { property: "og:type", content: "website" },
     ],
+    links: [{ rel: "canonical", href: "https://shhchats.in/contact" }],
   }),
   component: Contact,
 });

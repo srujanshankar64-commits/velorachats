@@ -2,10 +2,13 @@ User-agent: *
 Allow: /
 Allow: /safety
 Allow: /privacy
+Allow: /contact
 Disallow: /discover
 Disallow: /auth
 Disallow: /profile
 Disallow: /messages
 Disallow: /rooms
+Disallow: /friends
+Disallow: /random
 
-Sitemap: https://velorachats.velorachats.workers.dev/sitemap.xml
+Sitemap: https://shhchats.in/sitemap.xml
