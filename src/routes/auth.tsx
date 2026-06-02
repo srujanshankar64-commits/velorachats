@@ -162,20 +162,24 @@ function AuthPage() {
       const ageNum = age ? parseInt(age, 10) : null;
       if (ageNum !== null && (ageNum < 13 || ageNum > 100)) throw new Error("Age must be between 13 and 100");
 
-      const { error } = await supabase.auth.signInAnonymously({
-        options: {
-          data: {
-            username: username.trim().toLowerCase(),
-            name: username.trim(),
-            age: ageNum?.toString() ?? "",
-            gender,
-            country: countrySelected || null,
-            state: stateField.trim() || null,
-          },
-        },
-      });
+      // Sign in anonymously (no data param - causes 422 error)
+      const { data: anonData, error } = await supabase.auth.signInAnonymously();
       if (error) throw error;
-      nav({ to: "/discover" });
+      const uid = anonData?.user?.id;
+      if (!uid) throw new Error('Sign-in failed, please try again');
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: uid,
+        username: username.trim().toLowerCase(),
+        name: username.trim(),
+        age: ageNum,
+        gender,
+        country: countrySelected || null,
+        state: stateField.trim() || null,
+        is_online: true,
+        last_seen: new Date().toISOString(),
+      });
+      if (profileError) throw profileError;
+      nav({ to: '/discover' });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
