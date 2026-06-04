@@ -10,10 +10,10 @@ const SITE = "https://shhchats.in";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ShhChats — Late night anonymous chat with real people" },
-      { name: "description", content: "Late night anonymous chat for the curious mind. Talk to a real person instantly when you can't sleep — 100% free, private, and judgment-free." },
-      { property: "og:title", content: "ShhChats — Late night anonymous chat" },
-      { property: "og:description", content: "Talk to a real person when your mind won't stop. Free, anonymous, judgment-free." },
+      { title: "ShhChats — Anonymous Chat & Talk to Strangers (No Login)" },
+      { name: "description", content: "Talk to strangers online free on ShhChats. The ultimate anonymous chat website with no login or registration. Connect with real people in safe late night chat rooms." },
+      { property: "og:title", content: "ShhChats — Anonymous Chat & Talk to Strangers" },
+      { property: "og:description", content: "Talk to strangers online free with no login. Join secure late night chat rooms instantly." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: SITE + "/" },
       { name: "twitter:url", content: SITE + "/" },
@@ -81,12 +81,12 @@ function Landing() {
   }
 
   const features = [
-    { icon: Moon, t: "Always someone awake" },
-    { icon: Lock, t: "Fully anonymous" },
-    { icon: Users, t: "Smart matching" },
-    { icon: MessageCircle, t: "Real-time chat" },
-    { icon: Shield, t: "Actually safe" },
-    { icon: MapPin, t: "Know their city" },
+    { icon: Moon, t: "Late night chat rooms" },
+    { icon: Lock, t: "Anonymous chat no login" },
+    { icon: Users, t: "Smart stranger matching" },
+    { icon: MessageCircle, t: "Talk to strangers online free" },
+    { icon: Shield, t: "Safe Omegle alternative" },
+    { icon: MapPin, t: "Chat with strangers by city" },
   ];
 
   return (
@@ -114,10 +114,10 @@ function Landing() {
           <h1 className="text-[40px] sm:text-[56px] leading-[1.1] tracking-tight max-w-2xl">
             <span className="text-[#E8EAED]">For the nights you can't sleep.</span>
             <br />
-            <span className="text-[#8AB4F8]">Real people. Real conversations.</span>
+            <span className="text-[#8AB4F8]">Anonymous Chat. No Login.</span>
           </h1>
           <p className="mt-5 text-[17px] text-[#9AA0A6] max-w-xl">
-            When it's late and your mind won't stop — someone on ShhChats is always awake. Anonymous, free, judgment-free.
+            Want to <strong>talk to strangers online free</strong>? ShhChats connects you to active <strong>late night chat rooms</strong> instantly. Safe, free, and 100% anonymous with no registration required.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-sm sm:max-w-none sm:w-auto">
             <button onClick={cta} disabled={busy}
@@ -150,9 +150,9 @@ function Landing() {
           <h2 className="text-[28px] md:text-[36px] text-center mb-10">How it works</h2>
           <ol className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[
-              { n: "01", t: "Tell us about yourself", b: "Name, age, state. Takes 20 seconds." },
-              { n: "02", t: "We find someone awake", b: "Matched in seconds to a real person." },
-              { n: "03", t: "Talk the night away", b: "Anonymous, real-time, judgment-free." },
+              { n: "01", t: "No registration required", b: "No login, no email. Enter your details in 10 seconds." },
+              { n: "02", t: "Find someone awake", b: "Matched in seconds to real people online." },
+              { n: "03", t: "Anonymous chat free", b: "Talk the night away in private chat rooms." },
             ].map((s) => (
               <li key={s.n} className="relative rounded-2xl p-6 surface border-soft overflow-hidden">
                 <span className="absolute -top-2 right-3 text-[64px] font-semibold text-[#8AB4F8] opacity-[0.08] leading-none select-none">{s.n}</span>

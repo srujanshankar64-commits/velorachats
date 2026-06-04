@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -108,10 +108,51 @@ function Discover() {
     return () => { channel.unsubscribe(); };
   }, [user, filter, q, meState, ageMin, ageMax, genderFilter]);
 
+  const [friendships, setFriendships] = useState<any[]>([]);
+
+  const loadFriendships = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("friendships")
+      .select("id, requester_id, addressee_id, status")
+      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
+    if (data) setFriendships(data);
+  }, [user]);
+
+  useEffect(() => {
+    loadFriendships();
+  }, [user, profiles, loadFriendships]);
+
   async function openDM(targetId: string) {
     const { error } = await supabase.rpc("get_or_create_dm", { target: targetId });
     if (error) return toast.error(error.message);
     nav({ to: "/messages/$userId", params: { userId: targetId } });
+  }
+
+  async function handleAddFriend(targetId: string) {
+    if (!user) return;
+    const { error } = await supabase
+      .from("friendships")
+      .insert({ requester_id: user.id, addressee_id: targetId, status: "pending" });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Friend request sent!");
+      loadFriendships();
+    }
+  }
+
+  async function handleAcceptFriend(friendshipId: string) {
+    const { error } = await supabase
+      .from("friendships")
+      .update({ status: "accepted" })
+      .eq("id", friendshipId);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Friend request accepted!");
+      loadFriendships();
+    }
   }
 
   const list = useMemo(() => profiles ?? [], [profiles]);
@@ -189,9 +230,23 @@ function Discover() {
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {list.map((p) => (
-              <PersonCard key={p.id} p={p} onAction={() => openDM(p.id)} />
-            ))}
+            {list.map((p) => {
+              const friendship = friendships.find(
+                (f) =>
+                  (f.requester_id === user?.id && f.addressee_id === p.id) ||
+                  (f.requester_id === p.id && f.addressee_id === user?.id)
+              );
+              return (
+                <PersonCard
+                  key={p.id}
+                  p={p}
+                  friendship={friendship}
+                  onAdd={() => handleAddFriend(p.id)}
+                  onAccept={() => handleAcceptFriend(friendship?.id)}
+                  onMessage={() => openDM(p.id)}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -330,13 +385,58 @@ function FilterSheet({ open, genderFilter, ageMin, ageMax, onGenderChange, onAge
   );
 }
 
-const PersonCard = memo(function PersonCard({ p, onAction }: { p: Profile; onAction: () => void }) {
+const PersonCard = memo(function PersonCard({
+  p,
+  friendship,
+  onAdd,
+  onAccept,
+  onMessage,
+}: {
+  p: Profile;
+  friendship?: { id: string; requester_id: string; addressee_id: string; status: string };
+  onAdd: () => void;
+  onAccept: () => void;
+  onMessage: () => void;
+}) {
   const displayName = p.name || p.username;
   const location = [p.city, p.state].filter(Boolean).join(", ") || p.state || "";
+
+  let buttonLabel = "+ Add";
+  let buttonStyle = { padding: "8px 15px", background: "#2a2318", color: "#f0ebe4", fontWeight: 600, border: "0.5px solid #3e3222" };
+  let clickHandler = onAdd;
+
+  if (friendship) {
+    if (friendship.status === "accepted") {
+      buttonLabel = "Message";
+      buttonStyle = { padding: "8px 15px", background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410", fontWeight: 600, border: "none" } as any;
+      clickHandler = onMessage;
+    } else if (friendship.status === "pending") {
+      if (friendship.requester_id === p.id) {
+        buttonLabel = "Accept";
+        buttonStyle = { padding: "8px 15px", background: "linear-gradient(135deg, #ffffff, #f0e8dc)", color: "#1a1410", fontWeight: 600, border: "none" } as any;
+        clickHandler = onAccept;
+      } else {
+        buttonLabel = "Requested";
+        buttonStyle = { padding: "8px 15px", background: "#1c1610", color: "#5e5040", fontWeight: 500, border: "0.5px solid #231d13" } as any;
+        clickHandler = () => {}; // Disabled
+      }
+    }
+  }
+
+  const handleCardClick = () => {
+    if (!friendship) {
+      onAdd();
+    } else if (friendship.status === "accepted") {
+      onMessage();
+    } else if (friendship.status === "pending" && friendship.requester_id === p.id) {
+      onAccept();
+    }
+  };
+
   return (
     <div
       className="flex items-center gap-[13px] p-[14px] rounded-[20px] warm-card neo-shadow cursor-pointer active:opacity-80"
-      onClick={onAction}
+      onClick={handleCardClick}
     >
       <UserAvatar id={p.id} name={displayName} online={p.is_online} size={46} />
       <div className="flex-1 min-w-0">
@@ -350,11 +450,12 @@ const PersonCard = memo(function PersonCard({ p, onAction }: { p: Profile; onAct
         </p>
       </div>
       <button
-        onClick={(e) => { e.stopPropagation(); onAction(); }}
+        onClick={(e) => { e.stopPropagation(); clickHandler(); }}
         className="rounded-[13px] text-[12px]"
-        style={{ padding: "8px 15px", background: "#2a2318", color: "#f0ebe4", fontWeight: 600, border: "0.5px solid #3e3222" }}
+        style={buttonStyle}
+        disabled={friendship?.status === "pending" && friendship.requester_id !== p.id}
       >
-        + Add
+        {buttonLabel}
       </button>
     </div>
   );

@@ -39,31 +39,44 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
 // Compress image to base64, max 800px wide, quality 0.7
 function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = document.createElement("img");
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const MAX = 800;
-      let { width, height } = img;
-      if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, width, height);
-      URL.revokeObjectURL(url);
-      const base64 = canvas.toDataURL("image/jpeg", 0.7);
-      if (base64.length > MAX_IMG_SIZE * 1.4) {
-        // Try lower quality
-        resolve(canvas.toDataURL("image/jpeg", 0.4));
-      } else {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const base64 = await fileToBase64(file);
+      const img = new window.Image();
+      img.onload = () => {
+        const MAX = 800;
+        let { width, height } = img;
+        if (width <= MAX && file.size < MAX_IMG_SIZE) {
+          resolve(base64);
+          return;
+        }
+        if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = () => {
+        // Fallback: resolve original if compression fails
         resolve(base64);
-      }
-    };
-    img.onerror = () => reject(new Error("Failed to load image"));
-    img.src = url;
+      };
+      img.src = base64;
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -84,6 +97,7 @@ function DMChat() {
   const [imgPreview, setImgPreview] = useState<string | null>(null); // base64 preview before send
   const [imgSending, setImgSending] = useState(false);
   const [showImgMenu, setShowImgMenu] = useState(false);
+  const [openedImages, setOpenedImages] = useState<Record<string, boolean>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -128,6 +142,7 @@ function DMChat() {
         .update({ read_at: new Date().toISOString() })
         .eq("room_id", rid as string)
         .neq("sender_id", user.id)
+        .eq("is_image", false)
         .is("read_at", null);
     })();
     return () => { active = false; };
@@ -154,11 +169,13 @@ function DMChat() {
           });
           if (m.sender_id !== user.id) {
             markRead(userId);
-            // Mark as read immediately → triggers DB delete for images
-            supabase.from("messages")
-              .update({ read_at: new Date().toISOString() })
-              .eq("id", m.id)
-              .then(() => {});
+            // Mark as read immediately → triggers DB delete for images (only for non-image messages)
+            if (!m.is_image) {
+              supabase.from("messages")
+                .update({ read_at: new Date().toISOString() })
+                .eq("id", m.id)
+                .then(() => {});
+            }
           }
         })
       .on("postgres_changes",
@@ -172,8 +189,8 @@ function DMChat() {
         { event: "DELETE", schema: "public", table: "messages" },
         (payload) => {
           const deleted = payload.old as { id: string };
-          // Check if deleted message was in our state (safest to filter by ID)
-          setMessages((prev) => prev.filter((x) => x.id !== deleted.id));
+          // Check if deleted message was in our state, and preserve if it is an image
+          setMessages((prev) => prev.filter((x) => x.id !== deleted.id || x.is_image));
         })
       .on("broadcast", { event: "typing" }, (payload) => {
         const p = payload.payload as { from: string; typing: boolean };
@@ -312,6 +329,14 @@ function DMChat() {
     }
   }
 
+  const handleOpenImage = useCallback(async (msgId: string) => {
+    setOpenedImages((prev) => ({ ...prev, [msgId]: true }));
+    await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", msgId);
+  }, []);
+
   async function blockUser() {
     if (!user) return;
     await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: userId });
@@ -374,7 +399,14 @@ function DMChat() {
           </span>
         </div>
         {messages.map((m) => (
-          <Bubble key={m.id} m={m} mine={m.sender_id === user!.id} myLastSentId={myLastSentId} />
+          <Bubble
+            key={m.id}
+            m={m}
+            mine={m.sender_id === user!.id}
+            myLastSentId={myLastSentId}
+            opened={openedImages[m.id]}
+            onOpen={handleOpenImage}
+          />
         ))}
         {crisis && (
           <div className="text-center my-3">
@@ -549,42 +581,76 @@ function DMChat() {
   );
 }
 
-const Bubble = memo(function Bubble({ m, mine, myLastSentId }: { m: Msg; mine: boolean; myLastSentId: string | null }) {
+const Bubble = memo(function Bubble({
+  m,
+  mine,
+  myLastSentId,
+  opened,
+  onOpen,
+}: {
+  m: Msg;
+  mine: boolean;
+  myLastSentId: string | null;
+  opened?: boolean;
+  onOpen?: (id: string) => void;
+}) {
   const isMyLast = mine && myLastSentId === m.id;
   const failed = m.status === "failed";
   const sending = m._local && m.status === "sending";
   const seen = !!m.read_at;
   const delivered = !!m.delivered_at;
 
+  const showPlaceholder = m.is_image && !mine && !m.read_at && !opened;
+
   return (
     <div className={`flex mb-1.5 ${mine ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[75%]">
         {m.is_image ? (
-          // Image bubble
-          <div
-            className="overflow-hidden"
-            style={{
-              borderRadius: mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-              border: mine ? "none" : "0.5px solid #2e2618",
-              opacity: sending ? 0.7 : 1,
-              position: "relative",
-            }}
-          >
-            <img
-              src={m.content}
-              alt="Photo"
-              className="block max-w-[220px] max-h-[280px] object-cover"
-              style={{ display: "block" }}
-            />
-            {!mine && (
-              <div
-                className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px]"
-                style={{ background: "rgba(0,0,0,0.5)", color: "rgba(255,255,255,0.7)" }}
-              >
-                🔥 Disappears after you see this
+          showPlaceholder ? (
+            <button
+              onClick={() => onOpen?.(m.id)}
+              className="px-4 py-3 flex items-center gap-3 cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] text-left"
+              style={{
+                background: "#201c14",
+                color: "#f5f0ea",
+                border: "1px dashed #5e5040",
+                borderRadius: "18px 18px 18px 4px",
+                outline: "none",
+              }}
+            >
+              <span className="text-xl">📷</span>
+              <div className="flex flex-col">
+                <span className="text-[14px] font-semibold text-[#f0e8dc] leading-tight">View Once Photo</span>
+                <span className="text-[11px] text-[#8a7460] font-normal mt-0.5">Tap to view • Will disappear after opened</span>
               </div>
-            )}
-          </div>
+            </button>
+          ) : (
+            // Image bubble
+            <div
+              className="overflow-hidden"
+              style={{
+                borderRadius: mine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                border: mine ? "none" : "0.5px solid #2e2618",
+                opacity: sending ? 0.7 : 1,
+                position: "relative",
+              }}
+            >
+              <img
+                src={m.content}
+                alt="Photo"
+                className="block max-w-[220px] max-h-[280px] object-cover"
+                style={{ display: "block" }}
+              />
+              {!mine && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 px-2 py-1 text-[10px]"
+                  style={{ background: "rgba(0,0,0,0.5)", color: "rgba(255,255,255,0.7)" }}
+                >
+                  🔥 Disappears after you see this
+                </div>
+              )}
+            </div>
+          )
         ) : (
           // Text bubble
           <div
