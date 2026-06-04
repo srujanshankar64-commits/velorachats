@@ -177,6 +177,7 @@ export type Database = {
           delivered_at: string | null
           id: string
           is_deleted: boolean | null
+          is_image: boolean
           read_at: string | null
           reply_to_id: string | null
           room_id: string
@@ -189,6 +190,7 @@ export type Database = {
           delivered_at?: string | null
           id?: string
           is_deleted?: boolean | null
+          is_image?: boolean
           read_at?: string | null
           reply_to_id?: string | null
           room_id: string
@@ -201,6 +203,7 @@ export type Database = {
           delivered_at?: string | null
           id?: string
           is_deleted?: boolean | null
+          is_image?: boolean
           read_at?: string | null
           reply_to_id?: string | null
           room_id?: string

@@ -24,6 +24,7 @@ type Msg = {
   sender_id: string;
   content: string;
   created_at: string;
+  room_id?: string;
   read_at?: string | null;
   delivered_at?: string | null;
   status?: string;

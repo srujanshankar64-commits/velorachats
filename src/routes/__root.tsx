@@ -87,13 +87,6 @@ function RootShell({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
         <script dangerouslySetInnerHTML={{ __html: `function initChatNotifications(){if(!("Notification"in window))return;if(Notification.permission!=="granted"&&Notification.permission!=="denied"){Notification.requestPermission();}}function playChatAlert(s,t){var a=new Audio("/notify.mp3");a.volume=1.0;a.play().catch(function(){});if(window.Notification&&Notification.permission==="granted"){try{new Notification("New message from "+(s||"Someone"),{body:t||"Sent a message",icon:"/favicon.svg",tag:"shhchats-message",renotify:true});}catch(e){}}}window.playChatAlert=playChatAlert;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",initChatNotifications);}else{initChatNotifications();}` }} />
-        
-        
-        {/* Monetag Vignette Banner */}
-        <script src="https://n6wxm.com/vignette.min.js" defer data-zone="11052131"></script>
-        {/* Monetag In-Page Push */}
-   <script>{`window._mtagConfig = { zone: 11052181, container: 'monetag-ipp' };`}</script>
-        <script src="https://ssp.monetag.com/tag/11052181" async></script>
         {/* Cloudflare Web Analytics */}
         <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "118112b5573b4eadbd1f78c0e043f479"}'></script>
       </head>

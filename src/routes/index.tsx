@@ -195,22 +195,3 @@ function Landing() {
 declare global {
   interface Window { playChatAlert?: (sender: string, text: string) => void }
 }
-
-if (typeof window !== 'undefined') {
-  const oldFetch = window.fetch;
-  window.fetch = async function(...args) {
-    const res = await oldFetch.apply(this, args);
-    if (args[0] && args[0].toString().includes('supabase')) {
-      try {
-        const clone = res.clone();
-        const data = await clone.json();
-        if (data && data.record) {
-          const snd = data.record.sender_name || data.record.username || 'Someone';
-          const txt = data.record.content || data.record.message_text || 'Sent a message';
-          if (typeof window.playChatAlert === 'function') window.playChatAlert(snd, txt);
-        }
-      } catch (e) {}
-    }
-    return res;
-  };
-}
