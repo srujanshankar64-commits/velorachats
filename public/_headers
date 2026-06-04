@@ -1,2 +1,22 @@
 https://shhchats.in/*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://static.cloudflareinsights.com; img-src 'self' data: https://*.supabase.co https:; font-src 'self' data:; worker-src 'self' blob:;
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com https://www.googletagmanager.com https://*.monetag.com https://5gvci.com https://nap5k.com https://n6wxm.com https://omg10.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cloudflareinsights.com https://static.cloudflareinsights.com https://www.google-analytics.com; img-src 'self' data: https://*.supabase.co https:; font-src 'self' data: https://fonts.gstatic.com; worker-src 'self' blob:;
+
+# Long-cache immutable build assets (hashed filenames)
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/_build/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static media in /public
+/favicon.svg
+  Cache-Control: public, max-age=604800
+
+/og-image.jpg
+  Cache-Control: public, max-age=604800
+
+/logo.jpg
+  Cache-Control: public, max-age=604800
+
+/notify.mp3
+  Cache-Control: public, max-age=604800
