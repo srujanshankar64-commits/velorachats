@@ -160,7 +160,7 @@ function AuthPage() {
       if (!username.trim() || username.length < 3) throw new Error("Username must be at least 3 characters");
       if (usernameAvailable === false) throw new Error("Username is already taken");
       const ageNum = age ? parseInt(age, 10) : null;
-      if (ageNum !== null && (ageNum < 13 || ageNum > 100)) throw new Error("Age must be between 13 and 100");
+      if (ageNum !== null && (ageNum < 18 || ageNum > 100)) throw new Error("You must be at least 18 years old to use ShhChats");
 
       // Sign in anonymously (no data param - causes 422 error)
       const { data: anonData, error } = await supabase.auth.signInAnonymously();
@@ -197,7 +197,7 @@ function AuthPage() {
         if (usernameAvailable === false) throw new Error("Username is already taken");
         if (password.length < 6) throw new Error("Password must be at least 6 characters");
         const ageNum = age ? parseInt(age, 10) : null;
-        if (ageNum !== null && (ageNum < 13 || ageNum > 100)) throw new Error("Age must be between 13 and 100");
+        if (ageNum !== null && (ageNum < 18 || ageNum > 100)) throw new Error("You must be at least 18 years old to use ShhChats");
 
         const { error } = await supabase.auth.signUp({
           email, password,
@@ -316,6 +316,14 @@ function AuthPage() {
             <h1 className="text-[28px] text-center">Welcome to ShhChats</h1>
           </div>
 
+          {/* 18+ Compliance Banner */}
+          <div 
+            className="mb-6 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-[12px] font-medium text-[#f28b82] text-center leading-normal"
+            style={{ background: "rgba(242,139,130,0.06)", borderColor: "rgba(242,139,130,0.2)" }}
+          >
+            ⚠️ 18+ Notice: By continuing as a guest or logging in, you confirm you are at least 18 years old.
+          </div>
+
           {mode === "choose" ? (
             <>
               <button onClick={guest} className="w-full h-14 rounded-full bg-[#7C3AED] text-white text-base flex items-center justify-center gap-2">
@@ -353,11 +361,11 @@ function AuthPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="number"
-                    min={13}
+                    min={18}
                     max={100}
                     value={age}
                     onChange={(e) => setAge(e.target.value)}
-                    placeholder="Age"
+                    placeholder="Age (Min 18)"
                     required
                     className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]"
                   />
@@ -412,11 +420,11 @@ function AuthPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="number"
-                        min={13}
+                        min={18}
                         max={100}
                         value={age}
                         onChange={(e) => setAge(e.target.value)}
-                        placeholder="Age"
+                        placeholder="Age (Min 18)"
                         required
                         className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]"
                       />
