@@ -1,61 +1,64 @@
-## Velora v2 — Complete rebuild
+## Goal
 
-A top-to-bottom redesign of every screen following your exact spec: pure black background, single violet accent (#7C3AED), Inter 400/500 only, pill buttons, zero shadows, 200ms transitions, mobile-first, optimized for 4GB Android.
+Defer all 4 Monetag ad scripts until the user first interacts with the page (click, scroll, touch, or keypress), or after a safety timeout (~4s) if no interaction happens. Ads still load — just not during the critical render path. No visual or UX changes.
 
-### 1. Design system reset (`src/styles.css`)
-- Replace existing tokens with: bg `#000`, surface `#1C1C1E`, sidebar `#0A0A0A`, text `#FFFFFF`, muted `#888`, online `#22C55E`, accent `#7C3AED`
-- Inter font, weights 400/500 only
-- Remove ALL glass, neon, shadow, blob, glow utilities and keyframes
-- Add: `dot-bounce`, `pulse-dot`, `spin-slow` keyframes
-- `@media (prefers-reduced-motion)` disables all animations
-- `body { overscroll-behavior: none; background: #000 }`
+## Why
 
-### 2. Homepage (`src/routes/index.tsx`)
-Centered hero, one-tap guest, feature row (3 icons), phone mockup frame, Safety footer link. Removes existing landing's gradient/glass styling. SEO meta updated; twitter:card added.
+Even with `async`/`defer`, the 4 Monetag scripts (`5gvci.com`, `nap5k.com`, `n6wxm.com`, `omg10.com`) start downloading + executing during the initial load, consuming main-thread time and competing with React hydration. This hurts LCP and INP. Delaying them until after first interaction moves them entirely out of the critical path.
 
-### 3. Auth (`src/routes/auth.tsx`)
-Guest button first (large violet pill). Divider with "or". Ghost email button. Drop gender from signup form.
+## Changes
 
-### 4. App shell (`src/components/app-shell.tsx`)
-- Mobile: hide bottom nav inside DM chat AND random chat (already done) — restyle to pure black, no border, simpler
-- Desktop: 280px left sidebar `#0A0A0A` containing DM list directly when on `/messages` routes, else compact nav
+**1. `index.html`** — Remove the 4 Monetag `<script>` tags (lines 30–33). Keep Google Analytics, notifications, preconnects untouched.
 
-### 5. DM list (`src/routes/_authenticated.messages.index.tsx`)
-72px rows, avatar + online dot, username, last message preview / "typing…", timestamp + unread violet badge or violet eye for seen. Search bar at top. No dividers.
+**2. `index.html`** — Add a tiny inline bootstrap script that:
+- Listens once for `pointerdown`, `keydown`, `scroll`, `touchstart` (passive)
+- Also sets a `setTimeout` fallback (~4000ms) so ads still load for passive users
+- On trigger, dynamically injects the 4 Monetag scripts in the same order with the same `data-zone` / `z=` parameters
+- Self-removes its listeners after first fire
 
-### 6. DM chat (`src/routes/_authenticated.messages.$userId.tsx`)
-- iMessage-style bubbles (violet mine / `#1C1C1E` theirs, asymmetric radii)
-- Per-bubble HH:MM timestamps
-- Sent/delivered/seen ticks under my messages (track via `room_reads.last_read_at` vs message `created_at`)
-- Typing indicator: pure-CSS 3-dot bounce, broadcast via Supabase Realtime presence/broadcast channel
-- Auto-scroll, virtualized only if >100 messages (keep deps light — skip react-window, use simple slice of last 60 + load-older button to stay under 150KB)
-- Visual viewport keyboard fix (JS effect adjusting bottom offset)
-- Swipe-right-to-back gesture
-- Three-dot menu → bottom sheet (Report / Block)
-- Back arrow → `/messages` (never `/`)
+**3. Preserve revenue**: keep the `<div id="monetag-ipp">` container in `__root.tsx` so in-page push has its slot the moment scripts load.
 
-### 7. Random chat (`src/routes/_authenticated.random.tsx`)
-- Waiting screen: centered violet spinner, "Finding your match…", live waiter count (queries `match_queue` every 5s), >30s message swap, bottom Cancel link
-- Active chat reuses chat UI + floating "Next person →" ghost pill above input
+**4. Keep `dns-prefetch` hints** for the 4 ad domains so when they do load, DNS is already resolved (zero perf cost before fire).
 
-### 8. Safety page (`src/routes/safety.tsx`)
-Four sections per spec, plain dark layout.
+## Technical detail
 
-### 9. Misc
-- Favicon: inline SVG "V" violet on black (`public/favicon.svg` + link in root head)
-- Remove existing ambient-background usage
-- Root head: preconnect to Supabase URL, twitter:card, updated default meta
-- Lovable badge: handled via publish settings (will toggle off)
+```html
+<!-- in <head>, replacing current Monetag block -->
+<link rel="dns-prefetch" href="https://5gvci.com" />
+<link rel="dns-prefetch" href="https://nap5k.com" />
+<link rel="dns-prefetch" href="https://n6wxm.com" />
+<link rel="dns-prefetch" href="https://omg10.com" />
+<script>
+(function(){
+  var loaded=false;
+  function load(){
+    if(loaded)return;loaded=true;
+    var d=document,h=d.head||d.documentElement;
+    function s(src,attrs){var x=d.createElement('script');x.src=src;x.async=true;
+      if(attrs)for(var k in attrs)x.setAttribute(k,attrs[k]);h.appendChild(x);}
+    s('https://5gvci.com/act/files/tag.min.js?z=11068726',{'data-cfasync':'false'});
+    var a=d.createElement('script');a.dataset.zone='11068721';a.src='https://nap5k.com/tag.min.js';h.appendChild(a);
+    var b=d.createElement('script');b.dataset.zone='11068748';b.src='https://n6wxm.com/vignette.min.js';h.appendChild(b);
+    s('https://omg10.com/4/11068749',{'data-cfasync':'false'});
+    rm();
+  }
+  var evts=['pointerdown','keydown','touchstart','scroll'];
+  function rm(){evts.forEach(function(e){window.removeEventListener(e,load,{passive:true});});}
+  evts.forEach(function(e){window.addEventListener(e,load,{passive:true,once:true});});
+  setTimeout(load,4000);
+})();
+</script>
+```
 
-### Technical notes
-- No new deps; keep bundle lean. Drop framer-motion usage on landing (CSS only).
-- Typing presence: Supabase Realtime `channel.track({ typing: bool })`; debounced 1.5s.
-- Read receipts: when chat opens or new message arrives while focused, upsert `room_reads`. Render seen state for my last message by comparing `created_at <= other.last_read_at` from `room_reads` subscription.
-- Online count on landing: `count(*)` on `profiles where is_online`, refresh 10s.
-- Skip animations under `prefers-reduced-motion`.
+## Expected impact
 
-### Files touched
-- edit: `src/styles.css`, `src/routes/__root.tsx`, `src/routes/index.tsx`, `src/routes/auth.tsx`, `src/components/app-shell.tsx`, `src/routes/_authenticated.messages.index.tsx`, `src/routes/_authenticated.messages.$userId.tsx`, `src/routes/_authenticated.random.tsx`, `src/routes/_authenticated.discover.tsx` (restyle), `src/routes/_authenticated.profile.tsx` (restyle)
-- create: `src/routes/safety.tsx`, `public/favicon.svg`, `src/lib/use-keyboard-inset.ts`, `src/lib/use-swipe-back.ts`
+- **LCP**: −200 to −500ms on landing page (no third-party JS competes with hero render)
+- **INP**: significant improvement since ad script execution shifts out of initial interaction window
+- **Revenue**: unaffected — ads still fire within ~4s or on first interaction (whichever first), which is when users see/scroll past them anyway
+- **Visuals**: zero change
 
-After approval I'll implement in one pass and verify the build.
+## Out of scope
+
+- Self-hosting fonts (separate pass)
+- Removing ads from specific routes
+- Any UI/UX/design changes
