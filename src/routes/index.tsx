@@ -106,11 +106,13 @@ function Landing() {
         {/* Hero */}
         <section className="relative min-h-[85vh] md:min-h-screen flex flex-col items-center justify-center px-6 text-center"
           style={{ background: "radial-gradient(ellipse 800px 500px at 50% -100px, rgba(138,180,248,0.06), transparent)" }}>
-          {online > 0 && (
-            <div className="mb-5 inline-flex items-center gap-2 px-3.5 h-8 rounded-full bg-accent-soft border border-[rgba(138,180,248,0.20)] text-[13px] text-[#8AB4F8]">
-              🌙 {online} {online === 1 ? "person" : "people"} talking right now
-            </div>
-          )}
+          <div className="mb-5 h-8 flex items-center justify-center" aria-live="polite">
+            {online > 0 && (
+              <div className="inline-flex items-center gap-2 px-3.5 h-8 rounded-full bg-accent-soft border border-[rgba(138,180,248,0.20)] text-[13px] text-[#8AB4F8]">
+                🌙 {online} {online === 1 ? "person" : "people"} talking right now
+              </div>
+            )}
+          </div>
           <h1 className="text-[40px] sm:text-[56px] leading-[1.1] tracking-tight max-w-2xl">
             <span className="text-[#E8EAED]">For the nights you can't sleep.</span>
             <br />
