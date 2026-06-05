@@ -6,5 +6,10 @@
   "main": "src/server.ts",
   "triggers": {
     "crons": ["* * * * *"]
+  },
+  "build": {
+    "alias": {
+      "tanstack-start-manifest:v": ".tanstack/start/manifest.json"
+    }
   }
 }
