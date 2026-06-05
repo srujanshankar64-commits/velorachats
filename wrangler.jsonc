@@ -1,10 +1,11 @@
+```json
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "shhchats",
-  "compatibility_date": "2026-05-01",
+  "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
-  "observability": {
-    "enabled": true
+  "main": "dist/server/index.js",
+  "triggers": {
+    "crons": ["* * * * *"]
   }
 }
