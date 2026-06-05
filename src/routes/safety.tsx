@@ -28,7 +28,7 @@ function SafetyPage() {
           Be kind. No harassment. No explicit content. No sharing personal info.
         </Section>
         <Section title="How to report">
-          Tap the three dots in any chat → Report. We review all reports within 24 hours.
+          Use the report button inside any chat to flag a user. You can also email us directly at safety@shhchats.in — we review all reports within 24 hours.
         </Section>
         <Section title="Privacy">
           We don't store your messages longer than needed. Guest sessions are anonymous. No data is sold.
