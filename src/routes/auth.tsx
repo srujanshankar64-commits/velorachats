@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft } from "lucide-react";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -14,69 +15,6 @@ export const Route = createFileRoute("/auth")({
   }),
   component: AuthPage,
 });
-
-const COUNTRIES = [
-  "Afghanistan", "Albania", "Algeria", "Argentina", "Australia", "Austria",
-  "Bangladesh", "Belgium", "Brazil", "Canada", "Chile", "China", "Colombia",
-  "Croatia", "Czech Republic", "Denmark", "Egypt", "Ethiopia", "Finland",
-  "France", "Germany", "Ghana", "Greece", "Hungary", "India", "Indonesia",
-  "Iran", "Iraq", "Ireland", "Israel", "Italy", "Japan", "Jordan", "Kenya",
-  "Malaysia", "Mexico", "Morocco", "Nepal", "Netherlands", "New Zealand",
-  "Nigeria", "Norway", "Pakistan", "Peru", "Philippines", "Poland", "Portugal",
-  "Romania", "Russia", "Saudi Arabia", "South Africa", "South Korea", "Spain",
-  "Sri Lanka", "Sweden", "Switzerland", "Thailand", "Turkey", "Ukraine",
-  "United Arab Emirates", "United Kingdom", "United States", "Vietnam",
-];
-
-const STATES_BY_COUNTRY: Record<string, string[]> = {
-  "India": [
-    "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
-    "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
-    "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
-    "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
-    "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
-  ],
-  "United States": [
-    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
-    "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
-    "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
-    "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
-    "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
-    "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
-    "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
-    "Wisconsin", "Wyoming"
-  ],
-  "Australia": [
-    "Australian Capital Territory", "New South Wales", "Northern Territory", "Queensland",
-    "South Australia", "Tasmania", "Victoria", "Western Australia"
-  ],
-  "Canada": [
-    "Alberta", "British Columbia", "Manitoba", "New Brunswick",
-    "Newfoundland and Labrador", "Nova Scotia", "Ontario",
-    "Prince Edward Island", "Quebec", "Saskatchewan"
-  ],
-  "United Kingdom": [
-    "England", "Northern Ireland", "Scotland", "Wales"
-  ],
-  "Germany": [
-    "Baden-Württemberg", "Bavaria", "Berlin", "Brandenburg", "Bremen", "Hamburg",
-    "Hesse", "Lower Saxony", "Mecklenburg-Vorpommern", "North Rhine-Westphalia",
-    "Rhineland-Palatinate", "Saarland", "Saxony", "Saxony-Anhalt",
-    "Schleswig-Holstein", "Thuringia"
-  ],
-  "Pakistan": [
-    "Azad Kashmir", "Balochistan", "Gilgit-Baltistan", "Khyber Pakhtunkhwa",
-    "Punjab", "Sindh"
-  ],
-  "Brazil": [
-    "Acre", "Alagoas", "Amapá", "Amazonas", "Bahia", "Ceará", "Espírito Santo",
-    "Goiás", "Maranhão", "Mato Grosso", "Mato Grosso do Sul", "Minas Gerais",
-    "Pará", "Paraíba", "Paraná", "Pernambuco", "Piauí", "Rio de Janeiro",
-    "Rio Grande do Norte", "Rio Grande do Sul", "Rondônia", "Roraima",
-    "Santa Catarina", "São Paulo", "Sergipe", "Tocantins"
-  ],
-};
 
 function AuthPage() {
   const nav = useNavigate();
@@ -101,14 +39,21 @@ function AuthPage() {
   const [stateInput, setStateInput] = useState("");
   const [showStateSugg, setShowStateSugg] = useState(false);
 
-  const filteredCountries = COUNTRIES.filter(c =>
-    c.toLowerCase().includes(countryInput.toLowerCase()) && countryInput.length > 0
-  ).slice(0, 6);
+  // Optimized, lazy-evaluated data lookups to prevent processing stalls
+  const filteredCountries = useMemo(() => {
+    if (!countryInput) return [];
+    return COUNTRIES.filter(c =>
+      c.toLowerCase().includes(countryInput.toLowerCase())
+    ).slice(0, 6);
+  }, [countryInput]);
 
-  const availableStates = STATES_BY_COUNTRY[countrySelected] || [];
-  const filteredStates = availableStates.filter(s =>
-    s.toLowerCase().includes(stateInput.toLowerCase()) && stateInput.length > 0
-  ).slice(0, 6);
+  const filteredStates = useMemo(() => {
+    if (!countrySelected || !stateInput) return [];
+    const availableStates = STATES_BY_COUNTRY[countrySelected] || [];
+    return availableStates.filter(s =>
+      s.toLowerCase().includes(stateInput.toLowerCase())
+    ).slice(0, 6);
+  }, [countrySelected, stateInput]);
 
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
@@ -162,7 +107,6 @@ function AuthPage() {
       const ageNum = age ? parseInt(age, 10) : null;
       if (ageNum !== null && (ageNum < 18 || ageNum > 100)) throw new Error("You must be at least 18 years old to use ShhChats");
 
-      // Sign in anonymously (no data param - causes 422 error)
       const { data: anonData, error } = await supabase.auth.signInAnonymously();
       if (error) throw error;
       const uid = anonData?.user?.id;
@@ -227,10 +171,8 @@ function AuthPage() {
     }
   }
 
-  // Reusable country+state fields
   const locationFields = (
     <div className="grid grid-cols-2 gap-2">
-      {/* Country autocomplete */}
       <div className="relative">
         <input
           value={countryInput}
@@ -268,7 +210,6 @@ function AuthPage() {
         )}
       </div>
 
-      {/* State autocomplete */}
       <div className="relative">
         <input
           value={stateInput}
@@ -316,7 +257,6 @@ function AuthPage() {
             <h1 className="text-[28px] text-center">Welcome to ShhChats</h1>
           </div>
 
-          {/* 18+ Compliance Banner */}
           <div 
             className="mb-6 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-[12px] font-medium text-[#f28b82] text-center leading-normal"
             style={{ background: "rgba(242,139,130,0.06)", borderColor: "rgba(242,139,130,0.2)" }}
@@ -478,3 +418,67 @@ function AuthPage() {
     </div>
   );
 }
+
+// Low-priority static lookups declared down here so they don't break routing paths
+const COUNTRIES = [
+  "Afghanistan", "Albania", "Algeria", "Argentina", "Australia", "Austria",
+  "Bangladesh", "Belgium", "Brazil", "Canada", "Chile", "China", "Colombia",
+  "Croatia", "Czech Republic", "Denmark", "Egypt", "Ethiopia", "Finland",
+  "France", "Germany", "Ghana", "Greece", "Hungary", "India", "Indonesia",
+  "Iran", "Iraq", "Ireland", "Israel", "Italy", "Japan", "Jordan", "Kenya",
+  "Malaysia", "Mexico", "Morocco", "Nepal", "Netherlands", "New Zealand",
+  "Nigeria", "Norway", "Pakistan", "Peru", "Philippines", "Poland", "Portugal",
+  "Romania", "Russia", "Saudi Arabia", "South Africa", "South Korea", "Spain",
+  "Sri Lanka", "Sweden", "Switzerland", "Thailand", "Turkey", "Ukraine",
+  "United Arab Emirates", "United Kingdom", "United States", "Vietnam",
+];
+
+const STATES_BY_COUNTRY: Record<string, string[]> = {
+  "India": [
+    "Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar",
+    "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa",
+    "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka",
+    "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
+    "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+  ],
+  "United States": [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut",
+    "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
+    "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
+    "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
+    "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
+    "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+    "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
+    "Wisconsin", "Wyoming"
+  ],
+  "Australia": [
+    "Australian Capital Territory", "New South Wales", "Northern Territory", "Queensland",
+    "South Australia", "Tasmania", "Victoria", "Western Australia"
+  ],
+  "Canada": [
+    "Alberta", "British Columbia", "Manitoba", "New Brunswick",
+    "Newfoundland and Labrador", "Nova Scotia", "Ontario",
+    "Prince Edward Island", "Quebec", "Saskatchewan"
+  ],
+  "United Kingdom": [
+    "England", "Northern Ireland", "Scotland", "Wales"
+  ],
+  "Germany": [
+    "Baden-Württemberg", "Bavaria", "Berlin", "Brandenburg", "Bremen", "Hamburg",
+    "Hesse", "Lower Saxony", "Mecklenburg-Vorpommern", "North Rhine-Westphalia",
+    "Rhineland-Palatinate", "Saarland", "Saxony", "Saxony-Anhalt",
+    "Schleswig-Holstein", "Thuringia"
+  ],
+  "Pakistan": [
+    "Azad Kashmir", "Balochistan", "Gilgit-Baltistan", "Khyber Pakhtunkhwa",
+    "Punjab", "Sindh"
+  ],
+  "Brazil": [
+    "Acre", "Alagoas", "Amapá", "Amazonas", "Bahia", "Ceará", "Espírito Santo",
+    "Goiás", "Maranhão", "Mato Grosso", "Mato Grosso do Sul", "Minas Gerais",
+    "Pará", "Paraíba", "Paraná", "Pernambuco", "Piauí", "Rio de Janeiro",
+    "Rio Grande do Norte", "Rio Grande do Sul", "Rondônia", "Roraima",
+    "Santa Catarina", "São Paulo", "Sergipe", "Tocantins"
+  ],
+};
