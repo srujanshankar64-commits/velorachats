@@ -1,6 +1,10 @@
+```json
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "shhchats",
   "compatibility_date": "2025-09-24",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist"
+  }
 }
