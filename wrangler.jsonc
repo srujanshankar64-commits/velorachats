@@ -13,5 +13,8 @@
     "crons": [
       "* * * * *"
     ]
+  },
+  "alias": {
+    "tanstack-start-manifest:v": "./src/patches/tanstack-start-manifest.js"
   }
 }
