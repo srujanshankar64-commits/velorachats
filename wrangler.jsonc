@@ -5,16 +5,6 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "main": "src/server.ts",
-  "assets": {
-    "directory": "dist/client"
-  },
-  "triggers": {
-    "crons": [
-      "* * * * *"
-    ]
-  },
-  "alias": {
-    "tanstack-start-manifest:v": "./src/patches/tanstack-start-manifest.js"
-  }
+  "pages_build_output_dir": "./dist/client",
+  "main": "./dist/server/server.js"
 }
