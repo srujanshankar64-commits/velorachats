@@ -1,65 +1,56 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/contact")({
-  head: () => ({
-    meta: [
-      { title: "Contact Us — ShhChats" },
-      { name: "description", content: "Reach the ShhChats team for support, safety reports, partnerships, or general feedback about the late-night anonymous chat app." },
-      { property: "og:title", content: "Contact Us — ShhChats" },
-      { property: "og:description", content: "Reach the ShhChats team for support, safety reports, or feedback." },
-      { property: "og:url", content: "https://shhchats.in/contact" },
-      { property: "og:type", content: "website" },
-    ],
-    links: [{ rel: "canonical", href: "https://shhchats.in/contact" }],
-  }),
-  component: Contact,
+  component: ContactPage,
 });
 
-function Contact() {
-  const { user } = useAuth();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
+function ContactPage() {
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
-    const { error } = await supabase.from("contact_submissions").insert({
-      user_id: user?.id ?? null,
-      name: name.trim(), email: email.trim(), message: message.trim(),
+    setLoading(true);
+    const data = new FormData(e.currentTarget);
+    const res = await fetch("https://formspree.io/f/xkoaglzr", {
+      method: "POST",
+      body: data,
+      headers: { Accept: "application/json" },
     });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    setSent(true);
+    setLoading(false);
+    if (res.ok) setSent(true);
   }
 
   return (
-    <div className="min-h-[100dvh] bg-black text-white">
-      <header className="h-14 px-5 flex items-center">
-        <Link to="/" className="p-2 -ml-2 text-[#888]"><ArrowLeft className="h-5 w-5" strokeWidth={1.5} /></Link>
-      </header>
-      <div className="max-w-md mx-auto px-6 py-6">
-        <h1 className="text-[28px] mb-2">Contact us</h1>
-        <p className="text-sm text-[#888] mb-6">Questions, feedback, or reports — we'll get back to you.</p>
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <a href="/" className="text-sm text-muted-foreground hover:underline">← Back</a>
+        <h1 className="text-2xl font-medium mt-4 mb-2">Contact us</h1>
+        <p className="text-muted-foreground text-sm mb-6">Questions, feedback, or reports — we'll get back to you.</p>
+
         {sent ? (
-          <div className="rounded-2xl bg-[#1C1C1E] p-6 text-center">
-            <p className="text-sm">Thanks! We received your message.</p>
-            <Link to="/" className="mt-4 inline-block text-[#7C3AED] text-sm">Back home</Link>
-          </div>
+          <div className="p-4 rounded-lg border text-sm">Thanks! We'll get back to you within 24 hours.</div>
         ) : (
-          <form onSubmit={submit} className="space-y-2.5">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" required maxLength={120} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required maxLength={254} className="w-full h-12 px-4 rounded-full bg-[#1C1C1E] outline-none text-sm placeholder:text-[#666]" />
-            <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Message" required rows={5} maxLength={4000} className="w-full px-4 py-3 rounded-2xl bg-[#1C1C1E] outline-none text-sm resize-none placeholder:text-[#666]" />
-            <button type="submit" disabled={busy} className="w-full h-14 rounded-full bg-[#7C3AED] text-base flex items-center justify-center gap-2 disabled:opacity-60">
-              {busy && <Loader2 className="h-5 w-5 spin-slow" />} Send
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <input name="name" type="text" placeholder="Your name" required
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm" />
+            <input name="email" type="email" placeholder="Your email" required
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm" />
+            <select name="topic" required
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm">
+              <option value="">Select a topic</option>
+              <option value="safety">Safety / Report abuse</option>
+              <option value="privacy">Privacy / Data request</option>
+              <option value="support">General support</option>
+              <option value="feedback">Feedback</option>
+              <option value="partnership">Partnership</option>
+            </select>
+            <textarea name="message" placeholder="Your message" rows={5} required
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm resize-none" />
+            <button type="submit" disabled={loading}
+              className="w-full py-2 rounded-lg border text-sm hover:bg-muted transition-colors">
+              {loading ? "Sending..." : "Send message"}
             </button>
           </form>
         )}

@@ -13,7 +13,7 @@ import { UnreadProvider } from "@/lib/unread";
 
 import appCss from "../styles.css?url";
 
-const SUPABASE_URL = "https://uavwrahakmzmfdwqwnek.supabase.co";
+const SUPABASE_URL = "https://qhghydjzfswqwsnejosi.supabase.co";
 const SITE = "https://shhchats.in";
 
 function NotFoundComponent() {

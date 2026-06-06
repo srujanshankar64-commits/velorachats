@@ -1,12 +1,8 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "shhchats",
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "src/server.ts",
-  "triggers": {
-    "crons": ["* * * * *"]
-  },
+  "pages_build_output_dir": "./dist/client",
   "alias": {
     "tanstack-start-manifest:v": "./node_modules/@tanstack/start-server-core/dist/esm/router-manifest.js",
     "#tanstack-start-entry": "./node_modules/@tanstack/start-server-core/dist/esm/createStartHandler.js",

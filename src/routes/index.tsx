@@ -76,11 +76,11 @@ function Landing() {
 
   const features = [
     { icon: Moon,          t: "Always someone awake",        d: "Someone online 24/7, even at 3am" },
-    { icon: Lock,          t: "Fully anonymous",              d: "No real name, no trace, no data stored" },
-    { icon: Users,         t: "Smart matching",               d: "Matched by age, city and vibe" },
-    { icon: MessageCircle, t: "Real-time chat",               d: "Instant messages, no delays" },
-    { icon: Shield,        t: "Actually safe",                d: "Block, report, stay in control" },
-    { icon: MapPin,        t: "Know their city",              d: "Chat with people near you in India" },
+    { icon: Lock,          t: "Fully anonymous",               d: "No real name, no trace, no data stored" },
+    { icon: Users,         t: "Smart matching",                d: "Matched by age, city and vibe" },
+    { icon: MessageCircle, t: "Real-time chat",                d: "Instant messages, no delays" },
+    { icon: Shield,        t: "Actually safe",                 d: "Block, report, stay in control" },
+    { icon: MapPin,        t: "Know their city",               d: "Chat with people near you in India" },
   ];
 
   return (
@@ -113,6 +113,15 @@ function Landing() {
               🌙 {online} {online === 1 ? "person" : "people"} talking right now
             </div>
           )}
+
+          {/* 18+ Compliance Banner */}
+          <div 
+            className="mb-6 max-w-md inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border text-[13px] font-medium text-[#f28b82]"
+            style={{ background: "rgba(242,139,130,0.06)", borderColor: "rgba(242,139,130,0.2)" }}
+          >
+            ⚠️ 18+ Notice: You must be at least 18 years old to use ShhChats.
+          </div>
+
           <h1 className="text-[40px] sm:text-[58px] leading-[1.1] tracking-tight max-w-2xl">
             <span className="text-[#E8EAED]">For the nights you can't sleep.</span>
             <br />

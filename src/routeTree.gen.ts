@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SafetyRouteImport } from './routes/safety'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -25,6 +26,11 @@ import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedRoomsRoomIdRouteImport } from './routes/_authenticated.rooms.$roomId'
 import { Route as AuthenticatedMessagesUserIdRouteImport } from './routes/_authenticated.messages.$userId'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/friends': typeof AuthenticatedFriendsRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/discover': typeof AuthenticatedDiscoverRoute
   '/friends': typeof AuthenticatedFriendsRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/safety': typeof SafetyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/_authenticated/discover': typeof AuthenticatedDiscoverRoute
   '/_authenticated/friends': typeof AuthenticatedFriendsRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
@@ -162,6 +171,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/safety'
     | '/sitemap.xml'
+    | '/terms'
     | '/discover'
     | '/friends'
     | '/profile'
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/safety'
     | '/sitemap.xml'
+    | '/terms'
     | '/discover'
     | '/friends'
     | '/profile'
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/safety'
     | '/sitemap.xml'
+    | '/terms'
     | '/_authenticated/discover'
     | '/_authenticated/friends'
     | '/_authenticated/profile'
@@ -213,10 +225,18 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   SafetyRoute: typeof SafetyRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TermsRoute: typeof TermsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -359,7 +379,18 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   SafetyRoute: SafetyRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TermsRoute: TermsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
