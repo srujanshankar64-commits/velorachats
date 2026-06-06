@@ -6,5 +6,10 @@
   "main": "src/server.ts",
   "triggers": {
     "crons": ["* * * * *"]
+  },
+  "alias": {
+    "tanstack-start-manifest:v": "./node_modules/@tanstack/start-server-core/dist/esm/router-manifest.js",
+    "#tanstack-start-entry": "./node_modules/@tanstack/start-server-core/dist/esm/createStartHandler.js",
+    "#tanstack-router-entry": "./node_modules/@tanstack/start-server-core/dist/esm/createStartHandler.js"
   }
 }
