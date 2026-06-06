@@ -3,8 +3,8 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import Loader2 from "lucide-react/dist/esm/icons/loader-2";
-import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
+import { Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
