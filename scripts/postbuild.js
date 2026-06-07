@@ -1,0 +1,21 @@
+import fs from 'fs';
+import path from 'path';
+
+// Cloudflare Pages requires a _worker.js file in the root of the output directory (dist/client).
+// TanStack Start builds the server entry to dist/server/server.js.
+// We must copy it to dist/client/_worker.js.
+fs.copyFileSync('dist/server/server.js', 'dist/client/_worker.js');
+
+// The server bundle might lazy-load chunks from dist/server/assets/.
+// We need to copy those over to dist/client/assets/ so the worker can find them.
+const sa = 'dist/server/assets';
+const ca = 'dist/client/assets';
+
+if (fs.existsSync(sa)) {
+  if (!fs.existsSync(ca)) fs.mkdirSync(ca, { recursive: true });
+  fs.readdirSync(sa).forEach(f => {
+    fs.copyFileSync(path.join(sa, f), path.join(ca, f));
+  });
+}
+
+console.log('✅ postbuild: Copied server.js -> dist/client/_worker.js and merged assets.');
