@@ -18,4 +18,16 @@ if (fs.existsSync(sa)) {
   });
 }
 
-console.log('✅ postbuild: Copied server.js -> dist/client/_worker.js and merged assets.');
+const generatedWrangler = 'dist/client/wrangler.json';
+if (fs.existsSync(generatedWrangler)) {
+  fs.unlinkSync(generatedWrangler);
+}
+
+const routesJson = {
+  version: 1,
+  include: ["/*"],
+  exclude: ["/assets/*"]
+};
+fs.writeFileSync('dist/client/_routes.json', JSON.stringify(routesJson, null, 2));
+
+console.log('✅ postbuild: Copied server.js -> dist/client/_worker.js, merged assets, and created _routes.json');
