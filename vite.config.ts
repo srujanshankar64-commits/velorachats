@@ -14,6 +14,7 @@ export default defineConfig({
     },
   },
   tanstackStart: {
+    client: { entry: "client" },
     server: { entry: "server" },
   },
 });
