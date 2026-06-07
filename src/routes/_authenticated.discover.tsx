@@ -424,13 +424,7 @@ const PersonCard = memo(function PersonCard({
   }
 
   const handleCardClick = () => {
-    if (!friendship) {
-      onAdd();
-    } else if (friendship.status === "accepted") {
-      onMessage();
-    } else if (friendship.status === "pending" && friendship.requester_id === p.id) {
-      onAccept();
-    }
+    onMessage();
   };
 
   return (
