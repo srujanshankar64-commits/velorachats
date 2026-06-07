@@ -16,15 +16,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    resolve: {
-      alias: {
-        // Use path.resolve (direct file path) instead of require.resolve()
-        // require.resolve() fails with ERR_PACKAGE_PATH_NOT_EXPORTED because these
-        // subpaths are not in the package's exports field. path.resolve bypasses that.
-        "tanstack-start-manifest:v": path.resolve(__dirname, "./node_modules/@tanstack/start-server-core/dist/esm/router-manifest.js"),
-        "#tanstack-start-entry": path.resolve(__dirname, "./node_modules/@tanstack/start-server-core/dist/esm/createStartHandler.js"),
-        "#tanstack-router-entry": path.resolve(__dirname, "./node_modules/@tanstack/start-server-core/dist/esm/createStartHandler.js"),
-      },
-    },
+    // custom vite config can go here
   },
 });
